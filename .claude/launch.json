@@ -1,0 +1,43 @@
+{
+  "servers": [
+    {
+      "id": "backend",
+      "name": "NetHelper API (FastAPI + Uvicorn)",
+      "command": "uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --log-level info",
+      "cwd": "backend",
+      "env": {
+        "PYTHONPATH": "."
+      },
+      "url": "http://localhost:8000/api/docs",
+      "description": "Backend FastAPI con hot-reload. Richiede: PostgreSQL attivo, .env configurato, venv attivato."
+    },
+    {
+      "id": "frontend",
+      "name": "NetHelper Frontend (Vite dev server)",
+      "command": "npm run dev",
+      "cwd": "frontend",
+      "url": "http://localhost:5173",
+      "description": "Frontend React con hot-reload. Il proxy /api/* → localhost:8000 è configurato in vite.config.ts."
+    },
+    {
+      "id": "celery-worker",
+      "name": "Celery Worker (scansioni SNMP/SSH)",
+      "command": "celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2",
+      "cwd": "backend",
+      "env": {
+        "PYTHONPATH": "."
+      },
+      "description": "Worker Celery per scansioni in background. Richiede: Redis attivo."
+    },
+    {
+      "id": "celery-beat",
+      "name": "Celery Beat (scansioni pianificate)",
+      "command": "celery -A app.tasks.celery_app beat --loglevel=info",
+      "cwd": "backend",
+      "env": {
+        "PYTHONPATH": "."
+      },
+      "description": "Scheduler Celery Beat per scansioni periodiche. Avviare dopo il worker."
+    }
+  ]
+}

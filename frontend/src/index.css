@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Inter font (loaded via HTML head) */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+}
+
+@layer components {
+  /* ============================================================ */
+  /* Rack Diagram */
+  /* ============================================================ */
+  .rack-unit {
+    @apply flex items-stretch gap-1;
+    min-height: 28px;
+  }
+
+  .rack-unit-label {
+    @apply flex items-center justify-end text-xs text-gray-400 font-mono pr-1 flex-shrink-0;
+    width: 28px;
+  }
+
+  .rack-slot-empty {
+    @apply flex-1 bg-gray-50 border border-dashed border-gray-200 rounded
+    hover:bg-gray-100 hover:border-gray-300 transition-colors cursor-pointer
+    flex items-center px-2;
+    height: 28px;
+  }
+
+  /* ============================================================ */
+  /* Topology Graph */
+  /* ============================================================ */
+  .topology-container {
+    @apply relative w-full h-full bg-gray-50 rounded-lg overflow-hidden;
+  }
+
+  /* ============================================================ */
+  /* Patch Panel */
+  /* ============================================================ */
+  .patch-panel-port {
+    @apply relative flex flex-col items-center justify-center border rounded
+    text-xs font-medium transition-all hover:opacity-80 hover:shadow-sm cursor-pointer;
+    width: 40px;
+    height: 40px;
+  }
+
+  .patch-panel-port--linked {
+    @apply bg-green-500 border-green-600 text-white;
+  }
+
+  .patch-panel-port--room-only {
+    @apply bg-yellow-400 border-yellow-500 text-gray-900;
+  }
+
+  .patch-panel-port--free {
+    @apply bg-gray-100 border-gray-300 text-gray-500;
+  }
+
+  /* ============================================================ */
+  /* Scan log output */
+  /* ============================================================ */
+  .scan-log {
+    @apply text-xs text-green-400 font-mono p-4 overflow-y-auto bg-gray-900;
+    max-height: 300px;
+    min-height: 120px;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  /* ============================================================ */
+  /* Badge utils */
+  /* ============================================================ */
+  .badge {
+    @apply inline-flex items-center font-medium rounded-full px-2.5 py-0.5 text-xs;
+  }
+
+  /* ============================================================ */
+  /* Form utils */
+  /* ============================================================ */
+  .form-input {
+    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
+    focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500
+    transition-shadow;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+
+  /* ============================================================ */
+  /* Utilization bars */
+  /* ============================================================ */
+  .utilization-bar {
+    @apply h-2 bg-gray-200 rounded-full overflow-hidden;
+  }
+
+  .utilization-bar__fill {
+    @apply h-full rounded-full transition-all;
+  }
+
+  .utilization-bar__fill--low {
+    @apply bg-green-500;
+  }
+
+  .utilization-bar__fill--medium {
+    @apply bg-yellow-500;
+  }
+
+  .utilization-bar__fill--high {
+    @apply bg-red-500;
+  }
+}
+
+@layer utilities {
+  /* Scrollbar hiding utility */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Monospace font utility */
+  .font-mono-sm {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+  }
+}

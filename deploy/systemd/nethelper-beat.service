@@ -1,0 +1,33 @@
+[Unit]
+Description=NetHelper – Celery Beat Scheduler (scansioni pianificate)
+Documentation=https://github.com/yourorg/nethelper
+After=network.target redis.service
+Requires=redis.service
+
+[Service]
+Type=exec
+User=nethelper
+Group=nethelper
+WorkingDirectory=/opt/nethelper/backend
+
+EnvironmentFile=/opt/nethelper/backend/.env
+
+ExecStart=/opt/nethelper/venv/bin/celery \
+    -A app.tasks.celery_app \
+    beat \
+    --loglevel=info \
+    --scheduler celery.beat:PersistentScheduler \
+    --pidfile=/tmp/nethelper-beat.pid
+
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nethelper-beat
+
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

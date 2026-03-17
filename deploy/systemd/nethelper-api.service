@@ -1,0 +1,35 @@
+[Unit]
+Description=NetHelper – FastAPI Backend (Uvicorn)
+Documentation=https://github.com/yourorg/nethelper
+After=network.target postgresql.service redis.service
+Requires=postgresql.service redis.service
+
+[Service]
+Type=exec
+User=nethelper
+Group=nethelper
+WorkingDirectory=/opt/nethelper/backend
+
+# Carica variabili d'ambiente dal file .env
+EnvironmentFile=/opt/nethelper/backend/.env
+
+ExecStart=/opt/nethelper/venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 2 \
+    --log-level info \
+    --access-log
+
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nethelper-api
+
+# Limiti di sicurezza
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

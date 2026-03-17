@@ -1,0 +1,23 @@
+# Normalizza line endings su LF per tutti i file di testo
+* text=auto eol=lf
+
+# Shell scripts: sempre LF
+*.sh text eol=lf
+
+# Windows batch: CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binari: non toccare
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.otf binary
+*.pdf binary
+*.zip binary

@@ -1,0 +1,71 @@
+# ────────────────────────────────────────────
+# NetHelper – .gitignore
+# ────────────────────────────────────────────
+
+# ─── Python ───────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+.python-version
+venv/
+.venv/
+env/
+ENV/
+
+# ─── Alembic (versioni generate localmente) ─
+# Decommenta se vuoi escludere le migrations dal repo
+# backend/alembic/versions/
+
+# ─── Variabili d'ambiente (MAI committare) ──
+.env
+.env.local
+.env.production
+*.secret
+
+# ─── Database locali ──────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ─── Log ──────────────────────────────────
+*.log
+logs/
+celerybeat-schedule
+celerybeat.pid
+
+# ─── Frontend ─────────────────────────────
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+
+# ─── IDE / Editor ─────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Test ─────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Chiavi SSH / certificati ─────────────
+*.pem
+*.key
+*.crt
+id_rsa
+id_rsa.pub
+
+# ─── Docker (opzionale, se aggiunti) ──────
+.dockerignore

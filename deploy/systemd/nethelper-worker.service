@@ -1,0 +1,36 @@
+[Unit]
+Description=NetHelper – Celery Worker (scansioni SNMP/SSH/IP Range)
+Documentation=https://github.com/yourorg/nethelper
+After=network.target redis.service postgresql.service
+Requires=redis.service postgresql.service
+
+[Service]
+Type=exec
+User=nethelper
+Group=nethelper
+WorkingDirectory=/opt/nethelper/backend
+
+EnvironmentFile=/opt/nethelper/backend/.env
+
+ExecStart=/opt/nethelper/venv/bin/celery \
+    -A app.tasks.celery_app \
+    worker \
+    --loglevel=info \
+    --concurrency=4 \
+    --queues=scans,default \
+    --time-limit=600 \
+    --soft-time-limit=540 \
+    --hostname=worker@%%h
+
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nethelper-worker
+
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
