@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#4f46e5"/>
+  <!-- WiFi arcs -->
+  <path d="M16 22a2 2 0 1 0 0-4 2 2 0 0 0 0 4z" fill="white"/>
+  <path d="M10.1 17.1a8.5 8.5 0 0 1 11.8 0" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <path d="M6.3 13.3a14 14 0 0 1 19.4 0" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+</svg>

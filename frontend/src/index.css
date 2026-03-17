@@ -2,156 +2,171 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import Inter font (loaded via HTML head) */
+/* ─── Font ──────────────────────────────────────────────────────────────── */
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    @apply text-gray-900 bg-surface-100;
   }
 
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
 
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
+  h1 { @apply text-2xl font-bold tracking-tight; }
+  h2 { @apply text-xl font-semibold; }
+  h3 { @apply text-base font-semibold; }
 
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #d1d5db;
-    border-radius: 3px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #9ca3af;
-  }
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-gray-400; }
 }
 
+/* ─── Components ─────────────────────────────────────────────────────────── */
 @layer components {
-  /* ============================================================ */
-  /* Rack Diagram */
-  /* ============================================================ */
-  .rack-unit {
-    @apply flex items-stretch gap-1;
-    min-height: 28px;
+
+  /* ── Card ── */
+  .card {
+    @apply bg-white rounded-2xl border border-gray-200/80 shadow-card;
+  }
+  .card-hover {
+    @apply card transition-shadow hover:shadow-card-md;
   }
 
-  .rack-unit-label {
-    @apply flex items-center justify-end text-xs text-gray-400 font-mono pr-1 flex-shrink-0;
-    width: 28px;
+  /* ── Buttons ── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg font-medium
+           text-sm transition-all duration-150 focus:outline-none focus:ring-2
+           focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800
+           focus:ring-primary-500 shadow-sm;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-gray-700 border border-gray-300
+           hover:bg-gray-50 active:bg-gray-100 focus:ring-gray-300;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 shadow-sm;
+  }
+  .btn-ghost {
+    @apply btn text-gray-600 hover:bg-gray-100 hover:text-gray-900 focus:ring-gray-200;
+  }
+  .btn-sm  { @apply px-3 py-1.5 text-xs; }
+  .btn-md  { @apply px-4 py-2 text-sm; }
+  .btn-lg  { @apply px-5 py-2.5 text-sm; }
+
+  /* ── Form ── */
+  .form-input {
+    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white
+           placeholder:text-gray-400
+           focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-500
+           transition-shadow shadow-inner-sm;
+  }
+  .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-1.5;
+  }
+  .form-hint {
+    @apply mt-1 text-xs text-gray-500;
   }
 
-  .rack-slot-empty {
-    @apply flex-1 bg-gray-50 border border-dashed border-gray-200 rounded
-    hover:bg-gray-100 hover:border-gray-300 transition-colors cursor-pointer
-    flex items-center px-2;
-    height: 28px;
-  }
-
-  /* ============================================================ */
-  /* Topology Graph */
-  /* ============================================================ */
-  .topology-container {
-    @apply relative w-full h-full bg-gray-50 rounded-lg overflow-hidden;
-  }
-
-  /* ============================================================ */
-  /* Patch Panel */
-  /* ============================================================ */
-  .patch-panel-port {
-    @apply relative flex flex-col items-center justify-center border rounded
-    text-xs font-medium transition-all hover:opacity-80 hover:shadow-sm cursor-pointer;
-    width: 40px;
-    height: 40px;
-  }
-
-  .patch-panel-port--linked {
-    @apply bg-green-500 border-green-600 text-white;
-  }
-
-  .patch-panel-port--room-only {
-    @apply bg-yellow-400 border-yellow-500 text-gray-900;
-  }
-
-  .patch-panel-port--free {
-    @apply bg-gray-100 border-gray-300 text-gray-500;
-  }
-
-  /* ============================================================ */
-  /* Scan log output */
-  /* ============================================================ */
-  .scan-log {
-    @apply text-xs text-green-400 font-mono p-4 overflow-y-auto bg-gray-900;
-    max-height: 300px;
-    min-height: 120px;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  }
-
-  /* ============================================================ */
-  /* Badge utils */
-  /* ============================================================ */
+  /* ── Badge ── */
   .badge {
     @apply inline-flex items-center font-medium rounded-full px-2.5 py-0.5 text-xs;
   }
 
-  /* ============================================================ */
-  /* Form utils */
-  /* ============================================================ */
-  .form-input {
-    @apply w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-    focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500
-    transition-shadow;
+  /* ── Table ── */
+  .table-base {
+    @apply w-full text-sm border-collapse;
+  }
+  .table-base thead tr {
+    @apply bg-surface-50 border-b border-gray-200;
+  }
+  .table-base th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider;
+  }
+  .table-base tbody tr {
+    @apply border-b border-gray-100 hover:bg-surface-50 transition-colors;
+  }
+  .table-base td {
+    @apply px-4 py-3 text-gray-700;
   }
 
-  .form-label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+  /* ── Section header ── */
+  .section-header {
+    @apply flex items-center justify-between mb-6;
+  }
+  .section-title {
+    @apply text-2xl font-bold text-gray-900;
+  }
+  .section-subtitle {
+    @apply text-sm text-gray-500 mt-0.5;
   }
 
-  /* ============================================================ */
-  /* Utilization bars */
-  /* ============================================================ */
-  .utilization-bar {
-    @apply h-2 bg-gray-200 rounded-full overflow-hidden;
+  /* ── Rack ── */
+  .rack-unit {
+    @apply flex items-stretch gap-1;
+    min-height: 30px;
+  }
+  .rack-unit-label {
+    @apply flex items-center justify-end text-xs text-gray-400 font-mono pr-2 flex-shrink-0;
+    width: 30px;
+  }
+  .rack-slot-empty {
+    @apply flex-1 bg-gray-50/80 border border-dashed border-gray-200 rounded
+           hover:bg-primary-50 hover:border-primary-300 transition-colors cursor-pointer
+           flex items-center px-2;
+    height: 30px;
   }
 
-  .utilization-bar__fill {
-    @apply h-full rounded-full transition-all;
+  /* ── Patch panel ── */
+  .patch-port {
+    @apply relative flex flex-col items-center justify-center border rounded-lg
+           text-xs font-semibold transition-all hover:scale-105 hover:shadow-md cursor-pointer;
+    width: 44px; height: 44px;
+  }
+  .patch-port--linked   { @apply bg-emerald-500 border-emerald-600 text-white; }
+  .patch-port--room     { @apply bg-amber-400 border-amber-500 text-gray-900; }
+  .patch-port--free     { @apply bg-gray-100 border-gray-300 text-gray-500 hover:bg-gray-200; }
+
+  /* ── Scan log ── */
+  .scan-log {
+    @apply text-xs text-emerald-400 font-mono p-4 overflow-y-auto bg-gray-950 rounded-b-xl;
+    max-height: 320px; min-height: 120px;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.6;
   }
 
-  .utilization-bar__fill--low {
-    @apply bg-green-500;
-  }
+  /* ── Utilization bar ── */
+  .util-bar        { @apply h-2 bg-gray-200 rounded-full overflow-hidden; }
+  .util-bar__fill  { @apply h-full rounded-full transition-all duration-500; }
+  .util-bar--low   { @apply bg-emerald-500; }
+  .util-bar--mid   { @apply bg-amber-500; }
+  .util-bar--high  { @apply bg-red-500; }
 
-  .utilization-bar__fill--medium {
-    @apply bg-yellow-500;
+  /* ── Empty state ── */
+  .empty-state {
+    @apply flex flex-col items-center justify-center py-16 text-center text-gray-400;
   }
-
-  .utilization-bar__fill--high {
-    @apply bg-red-500;
-  }
+  .empty-state-icon { @apply mb-4 opacity-30; }
+  .empty-state-text { @apply text-sm font-medium text-gray-500; }
+  .empty-state-hint { @apply text-xs text-gray-400 mt-1; }
 }
 
+/* ─── Utilities ──────────────────────────────────────────────────────────── */
 @layer utilities {
-  /* Scrollbar hiding utility */
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* Monospace font utility */
   .font-mono-sm {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
-    font-size: 0.75rem;
-    line-height: 1.25rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem; line-height: 1.25rem;
   }
+
+  .text-balance { text-wrap: balance; }
+
+  .ring-primary { @apply ring-2 ring-primary-500/40; }
 }

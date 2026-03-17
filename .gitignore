@@ -46,6 +46,9 @@ frontend/dist/
 frontend/.vite/
 frontend/coverage/
 
+# ─── Vite cache (root) ────────────────────
+.vite/
+
 # ─── IDE / Editor ─────────────────────────
 .idea/
 .vscode/

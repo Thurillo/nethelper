@@ -5,7 +5,19 @@
       "Bash(git --version)",
       "Bash(git config:*)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth status)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login)"
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where npm:*)",
+      "Bash(npm --version)",
+      "Bash(npm install:*)",
+      "Bash(ls \"C:/Claude/GDRHelper/frontend/node_modules/.bin/vite\"*)",
+      "Bash(where node:*)",
+      "Bash(where gh:*)",
+      "Read(//c/Program Files/GitHub CLI/**)",
+      "Read(//c/Claude/GDRHelper/$LOCALAPPDATA/Programs/GitHub CLI/**)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login --web --hostname github.com)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" repo create nethelper --private --description \"Network management tool – gestione dispositivi, armadi rack, patch panel, SNMP/SSH scan, IPAM, VLAN\" --source=. --remote=origin --push)",
+      "Bash(\"/c/Program Files/GitHub:*)"
     ]
   }
 }
