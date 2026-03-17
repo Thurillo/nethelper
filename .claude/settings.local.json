@@ -5,7 +5,13 @@
       "Bash(git --version)",
       "Bash(git config:*)",
       "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth status)",
-      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login)"
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" auth login)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(where npm:*)",
+      "Bash(npm --version)",
+      "Bash(npm install:*)",
+      "Bash(ls \"C:/Claude/GDRHelper/frontend/node_modules/.bin/vite\"*)",
+      "Bash(where node:*)"
     ]
   }
 }
