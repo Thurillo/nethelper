@@ -10,12 +10,19 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: 30000,
 })
 
-// Request interceptor: add Authorization header
+// Request interceptor: add Authorization header + ensure trailing slash on collection paths
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('access_token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    // Add trailing slash to collection paths (no trailing slash, no query, no file extension)
+    if (config.url && !config.url.endsWith('/') && !config.url.includes('?')) {
+      const lastSegment = config.url.split('/').pop() ?? ''
+      if (!/^\d+$/.test(lastSegment) && !lastSegment.includes('.')) {
+        config.url = config.url + '/'
+      }
     }
     return config
   },
