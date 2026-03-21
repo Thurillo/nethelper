@@ -27,6 +27,7 @@ const mainNav: NavItem[] = [
 ]
 
 const networkNav: NavItem[] = [
+  { to: '/switch',       icon: <Network size={17} />,  label: 'Switch' },
   { to: '/patch-panel',  icon: <Grid3X3 size={17} />,  label: 'Patch Panel' },
   { to: '/vlan',         icon: <Layers size={17} />,   label: 'VLAN' },
   { to: '/prefissi',     icon: <Globe size={17} />,    label: 'Prefissi IP' },

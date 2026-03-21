@@ -601,6 +601,13 @@ export interface PatchPortDetail {
   cable_id: number | null
 }
 
+// Corrisponde a SwitchPortDetail del backend (routers/switches.py)
+export interface SwitchPortDetail {
+  interface: NetworkInterface
+  linked_interface: InterfaceMinimal | null
+  cable_id: number | null
+}
+
 // ============================================================
 // SCHEDULED SCANS
 // ============================================================

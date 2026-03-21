@@ -10,6 +10,7 @@ import DevicesPage from './pages/DevicesPage'
 import DeviceDetailPage from './pages/DeviceDetailPage'
 import TopologyPage from './pages/TopologyPage'
 import PatchPanelsPage from './pages/PatchPanelsPage'
+import SwitchesPage from './pages/SwitchesPage'
 import PatchPanelDetailPage from './pages/PatchPanelDetailPage'
 import VlansPage from './pages/VlansPage'
 import PrefixesPage from './pages/PrefixesPage'
@@ -34,6 +35,7 @@ const App: React.FC = () => {
         <Route path="dispositivi/:id" element={<DeviceDetailPage />} />
         <Route path="topologia" element={<TopologyPage />} />
         <Route path="patch-panel" element={<PatchPanelsPage />} />
+        <Route path="switch" element={<SwitchesPage />} />
         <Route path="patch-panel/:id" element={<PatchPanelDetailPage />} />
         <Route path="vlan" element={<VlansPage />} />
         <Route path="prefissi" element={<PrefixesPage />} />
