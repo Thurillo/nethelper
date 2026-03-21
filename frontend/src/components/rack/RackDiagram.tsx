@@ -1,6 +1,5 @@
 import React from 'react'
-import { useNavigate } from 'react-router-dom'
-import type { Cabinet, RackDiagramSlot } from '../../types'
+import type { Cabinet, RackDiagramSlot, RackDiagramDevice } from '../../types'
 import DeviceBlock from './DeviceBlock'
 
 const SLOT_HEIGHT = 28
@@ -9,10 +8,11 @@ interface RackDiagramProps {
   cabinet: Cabinet
   slots: RackDiagramSlot[]
   onSlotClick?: (u: number) => void
+  onDeviceClick?: (device: RackDiagramDevice) => void
+  selectedDeviceId?: number
 }
 
-const RackDiagram: React.FC<RackDiagramProps> = ({ cabinet, slots, onSlotClick }) => {
-  const navigate = useNavigate()
+const RackDiagram: React.FC<RackDiagramProps> = ({ cabinet, slots, onSlotClick, onDeviceClick, selectedDeviceId }) => {
   const uCount = cabinet.u_count || 42
 
   // Build a map: u_position -> slot
@@ -41,7 +41,8 @@ const RackDiagram: React.FC<RackDiagramProps> = ({ cabinet, slots, onSlotClick }
             <DeviceBlock
               device={device}
               uHeight={uHeight}
-              onClick={() => navigate(`/dispositivi/${device.id}`)}
+              onClick={() => onDeviceClick?.(device)}
+              isSelected={device.id === selectedDeviceId}
             />
           </div>
         </div>

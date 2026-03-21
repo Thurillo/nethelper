@@ -23,9 +23,10 @@ interface DeviceBlockProps {
   device: RackDiagramDevice
   uHeight: number
   onClick: () => void
+  isSelected?: boolean
 }
 
-const DeviceBlock: React.FC<DeviceBlockProps> = ({ device, uHeight, onClick }) => {
+const DeviceBlock: React.FC<DeviceBlockProps> = ({ device, uHeight, onClick, isSelected }) => {
   const [showTooltip, setShowTooltip] = useState(false)
   const colorClass = deviceTypeColors[device.device_type] ?? deviceTypeColors.other
   const height = uHeight * SLOT_HEIGHT
@@ -33,8 +34,9 @@ const DeviceBlock: React.FC<DeviceBlockProps> = ({ device, uHeight, onClick }) =
   return (
     <div
       className={clsx(
-        'relative border rounded cursor-pointer transition-opacity hover:opacity-90 px-2 flex flex-col justify-center overflow-hidden',
-        colorClass
+        'relative border-2 rounded cursor-pointer transition-all hover:opacity-90 px-2 flex flex-col justify-center overflow-hidden',
+        colorClass,
+        isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-gray-700 brightness-110' : 'border-opacity-100'
       )}
       style={{ height: `${height}px` }}
       onClick={onClick}
