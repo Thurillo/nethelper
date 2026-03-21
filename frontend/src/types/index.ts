@@ -158,6 +158,8 @@ export interface Device {
   status: DeviceStatus
   primary_ip: string | null
   management_ip: string | null
+  mac_address: string | null        // XX:XX:XX:XX:XX:XX
+  mac_address_cisco: string | null  // XXXX.XXXX.XXXX (computed by backend)
   serial_number: string | null
   asset_tag: string | null
   cabinet_id: number | null
@@ -188,6 +190,7 @@ export interface DeviceCreate {
   status?: DeviceStatus
   primary_ip?: string | null
   management_ip?: string | null
+  mac_address?: string | null
   serial_number?: string | null
   asset_tag?: string | null
   cabinet_id?: number | null

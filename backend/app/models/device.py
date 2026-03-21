@@ -78,6 +78,7 @@ class Device(Base):
     model: Mapped[Optional[str]] = mapped_column(sa.String(150), nullable=True)
     serial_number: Mapped[Optional[str]] = mapped_column(sa.String(150), nullable=True)
     asset_tag: Mapped[Optional[str]] = mapped_column(sa.String(100), nullable=True)
+    mac_address: Mapped[Optional[str]] = mapped_column(sa.String(17), nullable=True)  # XX:XX:XX:XX:XX:XX
 
     # Rack positioning
     u_position: Mapped[Optional[int]] = mapped_column(sa.SmallInteger, nullable=True)

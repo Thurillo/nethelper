@@ -134,7 +134,10 @@
       "Bash(xargs cat:*)",
       "Bash(ssh root@192.168.1.3 'TOKEN=$\\(curl -s -X POST http://localhost/api/v1/auth/login -H \"\"Content-Type: application/json\"\" -d \"\"{\\\\\"\"username\\\\\"\":\\\\\"\"admin\\\\\"\",\\\\\"\"password\\\\\"\":\\\\\"\"admin\\\\\"\"}\"\" | python3 -m json.tool | grep access_token | cut -d'\"''\"'\"\"'\"''\"' -f4\\) && curl -s \"\"http://localhost/api/v1/cabinets/\"\" -H \"\"Authorization: Bearer $TOKEN\"\" | python3 -m json.tool | head -30')",
       "Bash(ssh root@192.168.1.3 'TOKEN=$\\(curl -s -X POST http://localhost/api/v1/auth/login -H \"\"Content-Type: application/json\"\" -d \"\"{\\\\\"\"username\\\\\"\":\\\\\"\"admin\\\\\"\",\\\\\"\"password\\\\\"\":\\\\\"\"admin\\\\\"\"}\"\" | python3 -m json.tool | grep access_token | cut -d'\"''\"'\"\"'\"''\"' -f4\\) && curl -sv \"\"http://localhost/api/v1/cabinets/1/rack-diagram\"\" -H \"\"Authorization: Bearer $TOKEN\"\" 2>&1 | tail -20')",
-      "Bash(ssh root@192.168.1.3 'cd /opt/nethelper && git pull && systemctl restart nethelper-backend && cd frontend && NODE_OPTIONS=\"\"--max-old-space-size=4096\"\" npm run build 2>&1 | tail -5')"
+      "Bash(ssh root@192.168.1.3 'cd /opt/nethelper && git pull && systemctl restart nethelper-backend && cd frontend && NODE_OPTIONS=\"\"--max-old-space-size=4096\"\" npm run build 2>&1 | tail -5')",
+      "Bash(ssh root@192.168.1.3 'cd /opt/nethelper && git pull && source venv/bin/activate && cd backend && PYTHONPATH=/opt/nethelper/backend alembic revision --autogenerate -m \"\"add_mac_address_to_device\"\" 2>&1')",
+      "Bash(ssh root@192.168.1.3 'source /opt/nethelper/venv/bin/activate && cd /opt/nethelper/backend && PYTHONPATH=/opt/nethelper/backend alembic upgrade head 2>&1')",
+      "Bash(scp root@192.168.1.3:/opt/nethelper/backend/alembic/versions/c61dca1aad09_add_mac_address_to_device.py /c/Claude/GDRHelper/backend/alembic/versions/)"
     ]
   }
 }

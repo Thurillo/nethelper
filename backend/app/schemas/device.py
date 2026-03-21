@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.models.device import DeviceStatus, DeviceType
 from app.models.scan_job import ScanType
+from app.core.mac import normalize_mac
 
 
 class DeviceCreate(BaseModel):
@@ -18,6 +19,7 @@ class DeviceCreate(BaseModel):
     vendor_id: Optional[int] = None
     model: Optional[str] = None
     serial_number: Optional[str] = None
+    mac_address: Optional[str] = None
     u_position: Optional[int] = None
     u_height: int = 1
     primary_ip: Optional[str] = None
@@ -34,6 +36,16 @@ class DeviceCreate(BaseModel):
     ssh_port: Optional[int] = None
     notes: Optional[str] = None
 
+    @field_validator('mac_address', mode='before')
+    @classmethod
+    def normalise_mac(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        result = normalize_mac(v)
+        if result is None:
+            raise ValueError(f"Formato MAC non valido: '{v}'. Usa XX:XX:XX:XX:XX:XX, XXXX.XXXX.XXXX o simili.")
+        return result
+
 
 class DeviceUpdate(BaseModel):
     name: Optional[str] = None
@@ -44,6 +56,7 @@ class DeviceUpdate(BaseModel):
     vendor_id: Optional[int] = None
     model: Optional[str] = None
     serial_number: Optional[str] = None
+    mac_address: Optional[str] = None
     u_position: Optional[int] = None
     u_height: Optional[int] = None
     primary_ip: Optional[str] = None
@@ -61,6 +74,16 @@ class DeviceUpdate(BaseModel):
     notes: Optional[str] = None
     is_unmanaged_suspected: Optional[bool] = None
 
+    @field_validator('mac_address', mode='before')
+    @classmethod
+    def normalise_mac(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        result = normalize_mac(v)
+        if result is None:
+            raise ValueError(f"Formato MAC non valido: '{v}'. Usa XX:XX:XX:XX:XX:XX, XXXX.XXXX.XXXX o simili.")
+        return result
+
 
 class DeviceRead(BaseModel):
     id: int
@@ -72,6 +95,8 @@ class DeviceRead(BaseModel):
     vendor_id: Optional[int] = None
     model: Optional[str] = None
     serial_number: Optional[str] = None
+    mac_address: Optional[str] = None
+    mac_address_cisco: Optional[str] = None   # XXXX.XXXX.XXXX — computed
     u_position: Optional[int] = None
     u_height: int
     primary_ip: Optional[str] = None
@@ -90,6 +115,14 @@ class DeviceRead(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def model_validate(cls, obj, **kwargs):
+        instance = super().model_validate(obj, **kwargs)
+        if instance.mac_address:
+            from app.core.mac import mac_to_cisco
+            instance.mac_address_cisco = mac_to_cisco(instance.mac_address)
+        return instance
 
 
 class DeviceScanRequest(BaseModel):

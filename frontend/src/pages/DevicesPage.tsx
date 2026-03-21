@@ -20,11 +20,18 @@ import { it } from 'date-fns/locale'
 import type { Device, DeviceCreate, DeviceType, DeviceStatus, DeviceFilters } from '../types'
 
 const DEVICE_TYPES: DeviceType[] = ['switch', 'router', 'ap', 'server', 'patch_panel', 'firewall', 'ups', 'workstation', 'printer', 'camera', 'phone', 'other']
+
+/** Convert any MAC to Cisco XXXX.XXXX.XXXX for display purposes. */
+function macToCisco(mac: string): string {
+  const bare = mac.replace(/[:\-\.]/g, '').toLowerCase()
+  if (bare.length !== 12) return mac
+  return `${bare.slice(0,4)}.${bare.slice(4,8)}.${bare.slice(8,12)}`
+}
 const DEVICE_STATUSES: DeviceStatus[] = ['active', 'inactive', 'planned', 'decommissioned']
 
 const defaultForm: DeviceCreate = {
   name: '', device_type: 'switch', status: 'active',
-  primary_ip: null, management_ip: null, serial_number: null,
+  primary_ip: null, management_ip: null, mac_address: null, serial_number: null,
   asset_tag: null, cabinet_id: null, u_position: null, u_height: 1,
   vendor_id: null, model: null, os_version: null,
   snmp_community: null, snmp_version: 2, ssh_username: null, ssh_password: null, ssh_port: 22, notes: null,
@@ -68,6 +75,7 @@ const DevicesPage: React.FC = () => {
     setForm({
       name: d.name, device_type: d.device_type, status: d.status,
       primary_ip: d.primary_ip, management_ip: d.management_ip,
+      mac_address: d.mac_address,
       serial_number: d.serial_number, asset_tag: d.asset_tag,
       cabinet_id: d.cabinet_id, u_position: d.u_position, u_height: d.u_height,
       vendor_id: d.vendor_id, model: d.model, os_version: d.os_version,
@@ -90,6 +98,11 @@ const DevicesPage: React.FC = () => {
     { key: 'name', header: 'Nome', sortable: true, render: (d) => <span className="font-medium text-gray-900">{d.name}</span> },
     { key: 'device_type', header: 'Tipo', render: (d) => <DeviceTypeBadge type={d.device_type} /> },
     { key: 'primary_ip', header: 'IP', render: (d) => <span className="text-gray-600 font-mono text-xs">{d.primary_ip ?? '—'}</span> },
+    { key: 'mac_address', header: 'MAC', render: (d) => (
+      d.mac_address
+        ? <span className="text-gray-500 font-mono text-xs" title={`Cisco: ${d.mac_address_cisco ?? '—'}`}>{d.mac_address}</span>
+        : <span className="text-gray-300 text-xs">—</span>
+    )},
     { key: 'cabinet', header: 'Armadio', render: (d) => <span className="text-gray-500 text-xs">{d.cabinet?.name ?? '—'}</span> },
     { key: 'status', header: 'Stato', render: (d) => <DeviceStatusBadge status={d.status} /> },
     { key: 'last_scan_at', header: 'Ultimo scan', render: (d) => <span className="text-gray-400 text-xs">{d.last_scan_at ? format(new Date(d.last_scan_at), 'dd/MM HH:mm', { locale: it }) : '—'}</span> },
@@ -195,6 +208,21 @@ const DevicesPage: React.FC = () => {
             {f('Modello', 'model')}
             {f('IP primario', 'primary_ip')}
             {f('IP di gestione', 'management_ip')}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">MAC Address</label>
+              <input
+                type="text"
+                value={form.mac_address ?? ''}
+                onChange={(e) => setForm((p) => ({ ...p, mac_address: e.target.value || null }))}
+                placeholder="es. AA:BB:CC:DD:EE:FF o AABB.CCDD.EEFF"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+              />
+              {form.mac_address && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Cisco: <span className="font-mono">{macToCisco(form.mac_address)}</span>
+                </p>
+              )}
+            </div>
             {f('Numero seriale', 'serial_number')}
             {f('Asset tag', 'asset_tag')}
             <div>
