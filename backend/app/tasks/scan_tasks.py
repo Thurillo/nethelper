@@ -106,10 +106,22 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
                     from app.discovery.snmp_collector import SNMPCollector
                     from app.discovery.drivers.base import CollectedData
 
+                    # Priority: device-specific → vendor default → global fallback
+                    vendor = device.vendor
+                    snmp_community = (
+                        device.snmp_community
+                        or (vendor.snmp_default_community if vendor else None)
+                        or "public"
+                    )
+                    snmp_version = (
+                        device.snmp_version
+                        or (vendor.snmp_default_version if vendor else None)
+                        or 2
+                    )
                     snmp_params = {
                         "host": (device.primary_ip or "").split("/")[0],
-                        "community": device.snmp_community or "public",
-                        "version": device.snmp_version or 2,
+                        "community": snmp_community,
+                        "version": snmp_version,
                     }
                     client = SNMPClient(**snmp_params)
                     collector = SNMPCollector()

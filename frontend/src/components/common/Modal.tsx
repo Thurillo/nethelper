@@ -22,12 +22,15 @@ const sizeMap = {
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'md', footer }) => {
   const overlayRef = useRef<HTMLDivElement>(null)
   const firstFocusableRef = useRef<HTMLButtonElement>(null)
+  // Keep onClose in a ref so the effect doesn't re-run when the parent re-renders
+  const onCloseRef = useRef(onClose)
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
   useEffect(() => {
     if (!isOpen) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
 
     document.addEventListener('keydown', handleKeyDown)
@@ -38,7 +41,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 
       document.removeEventListener('keydown', handleKeyDown)
       document.body.style.overflow = ''
     }
-  }, [isOpen, onClose])
+  }, [isOpen])
 
   if (!isOpen) return null
 
