@@ -475,16 +475,16 @@ export type AuditAction = 'create' | 'update' | 'delete' | 'login' | 'logout' | 
 export interface AuditLog {
   id: number
   user_id: number | null
-  user?: User
+  username: string | null
   action: AuditAction
-  entity_type: string
+  entity_table: string | null
   entity_id: number | null
   field_name: string | null
   old_value: string | null
   new_value: string | null
-  ip_address: string | null
-  user_agent: string | null
-  created_at: string
+  client_ip: string | null
+  description: string | null
+  timestamp: string
 }
 
 // ============================================================
@@ -621,10 +621,10 @@ export interface ConflictFilters {
 
 export interface AuditLogFilters {
   user_id?: number
-  entity_type?: string
+  entity_table?: string
   action?: AuditAction
-  date_from?: string
-  date_to?: string
+  from_dt?: string
+  to_dt?: string
   page?: number
   size?: number
 }

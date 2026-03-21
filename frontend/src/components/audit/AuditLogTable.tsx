@@ -44,14 +44,14 @@ const AuditLogTable: React.FC = () => {
     if (!data) return
     const headers = ['Data/Ora', 'Utente', 'Azione', 'Entità', 'Campo', 'Valore prima', 'Valore dopo', 'IP Client']
     const rows = data.items.map((log) => [
-      format(new Date(log.created_at), 'dd/MM/yyyy HH:mm:ss'),
-      log.user?.username ?? 'Sistema',
+      format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss'),
+      log.username ?? 'Sistema',
       ACTION_LABELS[log.action]?.label ?? log.action,
-      `${log.entity_type}${log.entity_id ? ` #${log.entity_id}` : ''}`,
+      `${log.entity_table ?? ''}${log.entity_id ? ` #${log.entity_id}` : ''}`,
       log.field_name ?? '',
       log.old_value ?? '',
       log.new_value ?? '',
-      log.ip_address ?? '',
+      log.client_ip ?? '',
     ])
     const csv = [headers, ...rows].map((row) => row.map((v) => `"${v}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -79,8 +79,8 @@ const AuditLogTable: React.FC = () => {
         </select>
 
         <select
-          value={filters.entity_type ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, entity_type: e.target.value || undefined }))}
+          value={filters.entity_table ?? ''}
+          onChange={(e) => setFilters((f) => ({ ...f, entity_table: e.target.value || undefined }))}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
         >
           <option value="">Tutte le entità</option>
@@ -91,15 +91,15 @@ const AuditLogTable: React.FC = () => {
 
         <input
           type="date"
-          value={filters.date_from ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, date_from: e.target.value || undefined }))}
+          value={filters.from_dt ?? ''}
+          onChange={(e) => setFilters((f) => ({ ...f, from_dt: e.target.value || undefined }))}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
         <span className="text-gray-400 text-sm">—</span>
         <input
           type="date"
-          value={filters.date_to ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, date_to: e.target.value || undefined }))}
+          value={filters.to_dt ?? ''}
+          onChange={(e) => setFilters((f) => ({ ...f, to_dt: e.target.value || undefined }))}
           className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
         />
 
@@ -139,20 +139,20 @@ const AuditLogTable: React.FC = () => {
                 <React.Fragment key={log.id}>
                   <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleExpand(log.id)}>
                     <td className="px-4 py-3 whitespace-nowrap text-xs font-mono text-gray-600">
-                      {format(new Date(log.created_at), 'dd/MM/yy HH:mm', { locale: it })}
+                      {format(new Date(log.timestamp), 'dd/MM/yy HH:mm', { locale: it })}
                     </td>
-                    <td className="px-4 py-3 text-gray-700 font-medium">{log.user?.username ?? <span className="text-gray-400 italic">sistema</span>}</td>
+                    <td className="px-4 py-3 text-gray-700 font-medium">{log.username ?? <span className="text-gray-400 italic">sistema</span>}</td>
                     <td className="px-4 py-3">
                       {log.action && <Badge variant={ACTION_LABELS[log.action]?.variant ?? 'gray'}>{ACTION_LABELS[log.action]?.label ?? log.action}</Badge>}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600">
-                      <span className="font-medium">{log.entity_type}</span>
+                      <span className="font-medium">{log.entity_table ?? '—'}</span>
                       {log.entity_id && <span className="text-gray-400"> #{log.entity_id}</span>}
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-600 font-mono">{log.field_name ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-red-600 font-mono max-w-[120px] truncate">{log.old_value ?? '—'}</td>
                     <td className="px-4 py-3 text-xs text-green-700 font-mono max-w-[120px] truncate">{log.new_value ?? '—'}</td>
-                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">{log.ip_address ?? '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400 font-mono">{log.client_ip ?? '—'}</td>
                     <td className="px-4 py-3 text-gray-400">
                       {expanded.has(log.id) ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </td>
