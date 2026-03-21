@@ -95,6 +95,7 @@ async def delete_cabinet(
     await crud_cabinet.remove(db, cabinet_id)
 
 
+@router.get("/{cabinet_id}/rack-diagram", response_model=RackDiagram)
 @router.get("/{cabinet_id}/diagram", response_model=RackDiagram)
 async def get_rack_diagram(
     cabinet_id: int,

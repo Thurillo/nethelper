@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { clsx } from 'clsx'
-import type { Device } from '../../types'
+import type { RackDiagramDevice } from '../../types'
 
 const SLOT_HEIGHT = 28
 
@@ -20,7 +20,7 @@ const deviceTypeColors: Record<string, string> = {
 }
 
 interface DeviceBlockProps {
-  device: Device
+  device: RackDiagramDevice
   uHeight: number
   onClick: () => void
 }

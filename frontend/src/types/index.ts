@@ -90,11 +90,10 @@ export interface Cabinet {
   id: number
   name: string
   site_id: number
-  site?: Site
+  site?: { id: number; name: string }
   u_count: number
   description: string | null
   devices_count?: number
-  created_at: string
 }
 
 export interface CabinetCreate {
@@ -104,14 +103,30 @@ export interface CabinetCreate {
   description?: string | null
 }
 
+export interface RackDiagramDevice {
+  id: number
+  name: string
+  device_type: DeviceType
+  status: DeviceStatus
+  u_height: number
+  u_position: number | null
+  primary_ip: string | null
+  model: string | null
+  serial_number: string | null
+  notes: string | null
+}
+
 export interface RackDiagramSlot {
   u_position: number
-  device: Device | null
+  u_height: number
+  is_free: boolean
+  device: RackDiagramDevice | null
 }
 
 export interface RackDiagram {
   cabinet: Cabinet
   slots: RackDiagramSlot[]
+  free_slots: number[]
   used_u: number
   free_u: number
 }

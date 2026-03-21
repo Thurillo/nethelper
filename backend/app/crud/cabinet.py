@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import CRUDBase
@@ -12,10 +13,21 @@ from app.schemas.cabinet import (
     CabinetUpdate,
     RackDiagram,
     RackDiagramSlot,
+    RackDiagramDevice,
 )
 
 
 class CRUDCabinet(CRUDBase[Cabinet, CabinetCreate, CabinetUpdate]):
+
+    async def get(self, db: AsyncSession, id: int) -> Cabinet | None:
+        """Get cabinet with site eagerly loaded."""
+        result = await db.execute(
+            select(Cabinet)
+            .options(selectinload(Cabinet.site))
+            .where(Cabinet.id == id)
+        )
+        return result.scalar_one_or_none()
+
     async def get_devices_in_cabinet(
         self, db: AsyncSession, cabinet_id: int
     ) -> list[Device]:
@@ -31,7 +43,7 @@ class CRUDCabinet(CRUDBase[Cabinet, CabinetCreate, CabinetUpdate]):
 
         devices = await self.get_devices_in_cabinet(db, cabinet_id)
 
-        # Build occupied slots map: u_position -> device
+        # Build map: u_position -> device
         occupied: dict[int, Device] = {}
         for device in devices:
             if device.u_position is not None:
@@ -40,38 +52,48 @@ class CRUDCabinet(CRUDBase[Cabinet, CabinetCreate, CabinetUpdate]):
 
         slots: list[RackDiagramSlot] = []
         free_slots: list[int] = []
+        used_u = 0
 
         for u in range(1, cabinet.u_count + 1):
             if u in occupied:
                 device = occupied[u]
-                # Only add the first slot for multi-U devices
                 if device.u_position == u:
+                    h = device.u_height or 1
+                    used_u += h
                     slots.append(
                         RackDiagramSlot(
                             u_position=u,
-                            u_height=device.u_height or 1,
-                            device_id=device.id,
-                            device_name=device.name,
-                            device_type=device.device_type.value,
+                            u_height=h,
                             is_free=False,
+                            device=RackDiagramDevice(
+                                id=device.id,
+                                name=device.name,
+                                device_type=device.device_type.value,
+                                status=device.status.value,
+                                u_height=h,
+                                u_position=device.u_position,
+                                primary_ip=device.primary_ip,
+                                model=device.model,
+                                serial_number=device.serial_number,
+                                notes=device.notes,
+                            ),
                         )
                     )
-                # Skip continuation slots for multi-U devices
+                # Continuation slots skipped — covered by u_height of the first slot
             else:
                 slots.append(
-                    RackDiagramSlot(
-                        u_position=u,
-                        u_height=1,
-                        device_id=None,
-                        device_name=None,
-                        device_type=None,
-                        is_free=True,
-                    )
+                    RackDiagramSlot(u_position=u, u_height=1, is_free=True, device=None)
                 )
                 free_slots.append(u)
 
-        cabinet_read = CabinetRead.model_validate(cabinet)
-        return RackDiagram(cabinet=cabinet_read, slots=slots, free_slots=free_slots)
+        free_u = cabinet.u_count - used_u
+        return RackDiagram(
+            cabinet=CabinetRead.model_validate(cabinet),
+            slots=slots,
+            free_slots=free_slots,
+            used_u=used_u,
+            free_u=free_u,
+        )
 
 
 crud_cabinet = CRUDCabinet(Cabinet)
