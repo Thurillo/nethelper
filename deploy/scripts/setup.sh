@@ -75,7 +75,7 @@ do_install() {
     step "2/11  Installazione dipendenze"
     apt-get install -y -qq \
         git curl wget \
-        python3.12 python3.12-venv python3.12-dev python3-pip \
+        python3 python3-venv python3-dev python3-pip \
         libpq-dev libssl-dev libffi-dev build-essential \
         postgresql postgresql-contrib \
         redis-server \
@@ -124,7 +124,7 @@ do_install() {
     # ── 7. Backend Python ─────────────────────────────────────────────────────
     step "7/11  Backend Python"
     su - "$APP_USER" -c "
-        python3.12 -m venv $APP_DIR/venv
+        python3 -m venv $APP_DIR/venv
         source $APP_DIR/venv/bin/activate
         pip install --quiet --upgrade pip
         pip install --quiet -r $APP_DIR/backend/requirements.txt
