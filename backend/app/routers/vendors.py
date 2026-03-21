@@ -10,6 +10,7 @@ from app.crud.vendor import crud_vendor
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.schemas.vendor import VendorCreate, VendorRead, VendorUpdate
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/vendors", tags=["vendors"])
 
@@ -29,15 +30,17 @@ def _to_read(vendor) -> VendorRead:
     )
 
 
-@router.get("/", response_model=list[VendorRead])
+@router.get("/", response_model=PaginatedResponse[VendorRead])
 async def list_vendors(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 100,
-) -> list[VendorRead]:
-    vendors = await crud_vendor.get_multi(db, skip=skip, limit=limit)
-    return [_to_read(v) for v in vendors]
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[VendorRead]:
+    skip = (page - 1) * size
+    vendors = await crud_vendor.get_multi(db, skip=skip, limit=size)
+    total = await crud_vendor.count(db)
+    return PaginatedResponse.build([_to_read(v) for v in vendors], total=total, page=page, size=size)
 
 
 @router.post("/", response_model=VendorRead, status_code=status.HTTP_201_CREATED)

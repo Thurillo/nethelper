@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Generic, Optional, Type, TypeVar
 
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import Base
@@ -35,6 +35,14 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         stmt = stmt.offset(skip).limit(limit)
         result = await db.execute(stmt)
         return list(result.scalars().all())
+
+    async def count(self, db: AsyncSession, **filters: Any) -> int:
+        stmt = select(func.count()).select_from(self.model)
+        for field, value in filters.items():
+            if value is not None and hasattr(self.model, field):
+                stmt = stmt.where(getattr(self.model, field) == value)
+        result = await db.execute(stmt)
+        return result.scalar_one()
 
     async def create(self, db: AsyncSession, obj_in: CreateSchemaType) -> ModelType:
         obj_data = obj_in.model_dump(exclude_unset=False)
