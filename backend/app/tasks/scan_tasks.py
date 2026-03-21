@@ -2,17 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import socket
-import subprocess
 import sys
 from datetime import datetime, timezone
-from ipaddress import IPv4Address, ip_address as parse_ip, summarize_address_range
-from typing import Optional
+from ipaddress import ip_address as parse_ip, summarize_address_range
 
 from app.tasks.celery_app import celery_app
 
 
 def _get_event_loop() -> asyncio.AbstractEventLoop:
-    """Get or create an event loop for use in sync Celery tasks."""
     try:
         loop = asyncio.get_event_loop()
         if loop.is_closed():
@@ -36,11 +33,9 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
         from sqlalchemy import select
 
         async with get_async_session() as db:
-            # Update job status to running
             await crud_scan_job.update_status(db, scan_job_id, ScanStatus.running)
             await crud_scan_job.append_log(db, scan_job_id, f"[{datetime.now(timezone.utc).isoformat()}] Starting {scan_type} scan for device {device_id}...")
 
-            # Load device
             result = await db.execute(select(Device).where(Device.id == device_id))
             device = result.scalar_one_or_none()
             if device is None:
@@ -51,11 +46,8 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
                 return {"status": "failed", "error": "Device not found"}
 
             try:
-                # Select driver
-                driver_instance = None
                 scan_type_enum = ScanType(scan_type)
 
-                # Determine which driver to use
                 if scan_type_enum in (ScanType.ssh_full,):
                     driver_class_str = None
                     if device.vendor and device.vendor.driver_class:
@@ -67,7 +59,6 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
                     else:
                         raise ValueError(f"No SSH driver configured for device {device_id}")
                 else:
-                    # SNMP-based scan
                     from app.discovery.snmp_client import SNMPClient
                     from app.discovery.snmp_collector import SNMPCollector
                     from app.discovery.drivers.base import CollectedData
@@ -109,13 +100,11 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
                             {"protocol": "cdp", **vars(n)} for n in cdp_n
                         ]
 
-                    # Reconcile
                     from app.discovery.reconciler import Reconciler
                     reconciler = Reconciler()
                     await crud_scan_job.append_log(db, scan_job_id, "Reconciling collected data...")
                     conflicts = await reconciler.reconcile(db, device, collected, scan_job_id)
 
-                    # Detect unmanaged switches
                     from app.discovery.unmanaged_detector import detect_unmanaged_switches
                     unmanaged_conflicts = await detect_unmanaged_switches(db, device_id, scan_job_id)
 
@@ -127,7 +116,6 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
                         "conflicts_created": len(conflicts) + len(unmanaged_conflicts),
                     }
 
-                    # Store MAC entries in DB
                     if collected.mac_entries:
                         from app.models.mac_entry import MacEntry, MacEntrySource
                         from app.crud.mac_entry import crud_mac_entry
@@ -146,11 +134,9 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
                             db.add(mac_obj)
                         await db.flush()
 
-                    # Update last_seen on device
                     device.last_seen = datetime.now(timezone.utc)
                     db.add(device)
 
-                    # Update scan job
                     job = await crud_scan_job.get(db, scan_job_id)
                     if job:
                         job.result_summary = summary
@@ -181,7 +167,7 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
 
 @celery_app.task(bind=True)
 def run_ip_range_scan(self, scan_job_id: int) -> dict:
-    """Scan an IP range for live hosts."""
+    """Scan an IP range for live hosts using TCP + ICMP in parallel."""
 
     async def _run():
         from app.database import get_async_session
@@ -197,7 +183,7 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
 
             start_ip = job.range_start_ip
             end_ip = job.range_end_ip
-            ports = job.range_ports or [22, 80, 443, 8080, 8443]
+            ports: list[int] = job.range_ports or [22, 80, 443, 8080]
 
             if not start_ip or not end_ip:
                 await crud_scan_job.update_status(
@@ -209,11 +195,12 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
             # Expand IP range
             try:
                 ip_list: list[str] = []
-                for net in summarize_address_range(
-                    parse_ip(start_ip), parse_ip(end_ip)
-                ):
+                for net in summarize_address_range(parse_ip(start_ip), parse_ip(end_ip)):
                     for host in net.hosts():
                         ip_list.append(str(host))
+                # Also include start/end if they ended up as network/broadcast (edge case)
+                if not ip_list:
+                    ip_list = [start_ip] if start_ip == end_ip else []
             except Exception as exc:
                 await crud_scan_job.update_status(
                     db, scan_job_id, ScanStatus.failed, error_message=str(exc)
@@ -221,54 +208,77 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
                 return {"status": "failed", "error": str(exc)}
 
             await crud_scan_job.append_log(
-                db, scan_job_id, f"Scanning {len(ip_list)} IPs in range {start_ip}-{end_ip}..."
+                db, scan_job_id,
+                f"Scanning {len(ip_list)} IPs ({start_ip} → {end_ip}) | Porte: {ports}"
             )
 
-            found_hosts = []
-            for ip in ip_list:
-                alive = await _ping(ip)
-                if not alive:
-                    continue
+            # Scan all IPs concurrently in batches of 50
+            found_hosts: list[dict] = []
+            batch_size = 50
 
-                open_ports = []
-                for port in ports:
-                    if await _tcp_check(ip, port):
-                        open_ports.append(port)
+            async def scan_one(ip: str) -> dict | None:
+                """Returns host info if alive, else None."""
+                # Run ping and all TCP checks in parallel
+                tcp_tasks = [_tcp_check(ip, p, timeout=1.5) for p in ports]
+                ping_task = _ping(ip)
+                results = await asyncio.gather(ping_task, *tcp_tasks, return_exceptions=True)
+
+                ping_alive = results[0] is True
+                tcp_results = results[1:]
+                open_ports = [p for p, ok in zip(ports, tcp_results) if ok is True]
+
+                if not ping_alive and not open_ports:
+                    return None  # host not reachable
 
                 hostname = await _reverse_dns(ip)
+                return {"ip": ip, "open_ports": open_ports, "hostname": hostname, "ping": ping_alive}
 
-                await crud_scan_job.append_log(
-                    db, scan_job_id,
-                    f"Found: {ip} | ports={open_ports} | hostname={hostname}"
-                )
-                found_hosts.append({
-                    "ip": ip,
-                    "open_ports": open_ports,
-                    "hostname": hostname,
-                })
+            for i in range(0, len(ip_list), batch_size):
+                batch = ip_list[i:i + batch_size]
+                batch_results = await asyncio.gather(*[scan_one(ip) for ip in batch])
+                for result in batch_results:
+                    if result is not None:
+                        found_hosts.append(result)
+                        ports_str = ", ".join(str(p) for p in result["open_ports"]) or "—"
+                        hn = result["hostname"] or ""
+                        ping_str = " [ping ok]" if result["ping"] else ""
+                        await crud_scan_job.append_log(
+                            db, scan_job_id,
+                            f"✓ {result['ip']}{('  ' + hn) if hn else ''}  porte aperte: {ports_str}{ping_str}"
+                        )
 
-                # Create IpAddress record
-                from app.models.ip_address import IpAddress, IpAddressSource
-                from sqlalchemy import select
-                existing = await db.execute(
-                    select(IpAddress).where(IpAddress.address == ip)
-                )
+            if not found_hosts:
+                await crud_scan_job.append_log(db, scan_job_id, "Nessun host raggiungibile trovato.")
+
+            # Update IpAddress records
+            from app.models.ip_address import IpAddress, IpAddressSource
+            from sqlalchemy import select as sa_select
+            for h in found_hosts:
+                existing = await db.execute(sa_select(IpAddress).where(IpAddress.address == h["ip"]))
                 if existing.scalar_one_or_none() is None:
                     ip_obj = IpAddress(
-                        address=ip,
-                        dns_name=hostname,
+                        address=h["ip"],
+                        dns_name=h.get("hostname"),
                         source=IpAddressSource.ip_range_scan,
-                        description=f"Discovered by scan job {scan_job_id}",
+                        description=f"Scoperto dalla scansione #{scan_job_id}",
                     )
                     db.add(ip_obj)
-
             await db.flush()
-            summary = {"total_ips": len(ip_list), "alive_hosts": len(found_hosts)}
+
+            summary = {
+                "total_ips": len(ip_list),
+                "alive_hosts": len(found_hosts),
+                "found_hosts": found_hosts,
+            }
             job = await crud_scan_job.get(db, scan_job_id)
             if job:
                 job.result_summary = summary
                 db.add(job)
             await crud_scan_job.update_status(db, scan_job_id, ScanStatus.completed)
+            await crud_scan_job.append_log(
+                db, scan_job_id,
+                f"Scansione completata: {len(found_hosts)}/{len(ip_list)} host attivi."
+            )
             return {"status": "completed", "summary": summary}
 
     loop = _get_event_loop()
@@ -276,7 +286,7 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
 
 
 async def _ping(ip: str) -> bool:
-    """ICMP ping using subprocess. Returns True if host is alive."""
+    """ICMP ping. Returns True if host responds."""
     try:
         flag = "-n" if sys.platform == "win32" else "-c"
         wait_flag = "-w" if sys.platform == "win32" else "-W"
@@ -291,7 +301,7 @@ async def _ping(ip: str) -> bool:
         return False
 
 
-async def _tcp_check(ip: str, port: int, timeout: float = 0.5) -> bool:
+async def _tcp_check(ip: str, port: int, timeout: float = 1.5) -> bool:
     """Check if a TCP port is open."""
     try:
         _, writer = await asyncio.wait_for(
@@ -311,8 +321,9 @@ async def _reverse_dns(ip: str) -> str | None:
     """Attempt reverse DNS lookup."""
     try:
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(
-            None, lambda: socket.gethostbyaddr(ip)
+        result = await asyncio.wait_for(
+            loop.run_in_executor(None, lambda: socket.gethostbyaddr(ip)),
+            timeout=2.0,
         )
         return result[0]
     except Exception:

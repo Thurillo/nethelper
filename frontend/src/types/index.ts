@@ -401,18 +401,16 @@ export interface ScanJob {
   device?: Device
   scan_type: ScanType
   status: ScanStatus
+  range_start_ip: string | null
+  range_end_ip: string | null
+  range_ports: number[] | null
   started_at: string | null
   completed_at: string | null
+  result_summary: Record<string, unknown> | null
   error_message: string | null
   log_output: string | null
-  devices_found: number
-  interfaces_found: number
-  mac_entries_found: number
-  conflicts_created: number
-  ip_range_start: string | null
-  ip_range_end: string | null
-  ports_to_check: number[] | null
-  timeout_ms: number | null
+  is_scheduled: boolean
+  triggered_by_user_id: number | null
   created_at: string
 }
 

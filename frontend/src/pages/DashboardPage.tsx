@@ -224,12 +224,14 @@ const DashboardPage: React.FC = () => {
                       : format(new Date(job.created_at), 'dd MMM HH:mm', { locale: it })}
                   </td>
                   <td className="text-xs">
-                    {job.status === 'completed' && (
+                    {job.status === 'completed' && job.result_summary && (
                       <span className="text-gray-500">
-                        {job.devices_found} disp.
-                        {job.conflicts_created > 0 && (
+                        {job.scan_type === 'ip_range'
+                          ? `${(job.result_summary as Record<string, unknown>).alive_hosts ?? 0} host`
+                          : `${(job.result_summary as Record<string, unknown>).interfaces_collected ?? 0} int.`}
+                        {((job.result_summary as Record<string, unknown>).conflicts_created as number) > 0 && (
                           <span className="text-orange-600 ml-1.5 font-medium">
-                            · {job.conflicts_created} conf.
+                            · {(job.result_summary as Record<string, unknown>).conflicts_created as number} conf.
                           </span>
                         )}
                       </span>

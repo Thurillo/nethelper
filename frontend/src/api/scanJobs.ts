@@ -21,4 +21,8 @@ export const scanJobsApi = {
     const response = await apiClient.post<ScanJob>(`/scan-jobs/${id}/cancel`)
     return response.data
   },
+
+  delete: async (id: number): Promise<void> => {
+    await apiClient.delete(`/scan-jobs/${id}`)
+  },
 }

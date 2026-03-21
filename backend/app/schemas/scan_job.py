@@ -32,10 +32,12 @@ class ScanJobRead(BaseModel):
     status: ScanStatus
     range_start_ip: Optional[str] = None
     range_end_ip: Optional[str] = None
+    range_ports: Optional[list[int]] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     result_summary: Optional[dict[str, Any]] = None
     error_message: Optional[str] = None
+    log_output: Optional[str] = None
     is_scheduled: bool
     triggered_by_user_id: Optional[int] = None
     created_at: datetime

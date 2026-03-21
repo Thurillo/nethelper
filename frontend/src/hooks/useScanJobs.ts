@@ -60,3 +60,13 @@ export const useCancelScan = () => {
     },
   })
 }
+
+export const useDeleteScanJob = () => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => scanJobsApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['scan-jobs'] })
+    },
+  })
+}

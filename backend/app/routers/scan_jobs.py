@@ -131,6 +131,34 @@ async def cancel_scan_job(
     return ScanJobRead.model_validate(updated)
 
 
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_scan_job(
+    job_id: int,
+    request: Request,
+    current_user: Annotated[object, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    job = await crud_scan_job.get(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan job not found.")
+
+    # Revoke celery task if still running
+    if job.celery_task_id and job.status in (ScanStatus.pending, ScanStatus.running):
+        try:
+            from app.tasks.celery_app import celery_app
+            celery_app.control.revoke(job.celery_task_id, terminate=True)
+        except Exception:
+            pass
+
+    await db.delete(job)
+    await db.commit()
+
+    client_ip = getattr(request.state, "client_ip", None)
+    await log_action(db, user_id=current_user.id, action="delete", entity_table="scan_job",
+                     entity_id=job_id, client_ip=client_ip,
+                     description=f"Eliminata scansione #{job_id}.")
+
+
 @router.get("/{job_id}/events")
 async def stream_scan_job_logs(
     job_id: int,

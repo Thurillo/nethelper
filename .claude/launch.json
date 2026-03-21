@@ -9,8 +9,8 @@
     },
     {
       "name": "NetHelper Backend",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--reload", "--port", "8000", "--app-dir", "backend"],
+      "runtimeExecutable": "C:/Claude/GDRHelper/backend/venv/Scripts/python.exe",
+      "runtimeArgs": ["run_backend.py"],
       "port": 8000
     }
   ]
