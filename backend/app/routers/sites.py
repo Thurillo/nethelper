@@ -24,7 +24,9 @@ async def list_sites(
     page: int = 1,
     size: int = 100,
 ) -> PaginatedResponse[SiteRead]:
-    return await crud_site.get_multi_with_counts(db, skip=skip, limit=limit)
+    sites = await crud_site.get_multi_with_counts(db, skip=(page-1)*size, limit=size)
+    total = await crud_site.count(db)
+    return PaginatedResponse.build(sites, total=total, page=page, size=size)
 
 
 @router.post("/", response_model=SiteRead, status_code=status.HTTP_201_CREATED)

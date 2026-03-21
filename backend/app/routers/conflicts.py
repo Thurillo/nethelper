@@ -19,6 +19,15 @@ from app.schemas.pagination import PaginatedResponse
 router = APIRouter(prefix="/conflicts", tags=["conflicts"])
 
 
+@router.get("/pending-count")
+async def get_pending_count(
+    _: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    count = await crud_scan_conflict.get_pending_count(db)
+    return {"count": count}
+
+
 @router.get("/", response_model=PaginatedResponse[ScanConflictRead])
 async def list_conflicts(
     _: Annotated[object, Depends(get_current_user)],
