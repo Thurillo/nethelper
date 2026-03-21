@@ -17,10 +17,11 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    // Add trailing slash to collection paths (no trailing slash, no query, no file extension)
+    // Add trailing slash only to collection root paths (e.g. /vendors → /vendors/)
+    // Skip sub-resources, action endpoints and ID paths
     if (config.url && !config.url.endsWith('/') && !config.url.includes('?')) {
-      const lastSegment = config.url.split('/').pop() ?? ''
-      if (!/^\d+$/.test(lastSegment) && !lastSegment.includes('.')) {
+      const segments = config.url.split('/').filter(s => s.length > 0)
+      if (segments.length === 1) {
         config.url = config.url + '/'
       }
     }

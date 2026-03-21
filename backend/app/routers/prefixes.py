@@ -17,23 +17,25 @@ from app.schemas.ip_prefix import (
     IpPrefixUpdate,
     PrefixUtilization,
 )
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/prefixes", tags=["prefixes"])
 
 
-@router.get("/", response_model=list[IpPrefixRead])
+@router.get("/", response_model=PaginatedResponse[IpPrefixRead])
 async def list_prefixes(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     site_id: int | None = None,
-    skip: int = 0,
-    limit: int = 200,
-) -> list[IpPrefixRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[IpPrefixRead]:
     kwargs = {}
     if site_id is not None:
         kwargs["site_id"] = site_id
-    prefixes = await crud_ip_prefix.get_multi(db, skip=skip, limit=limit, **kwargs)
-    return [IpPrefixRead.model_validate(p) for p in prefixes]
+    prefixes = await crud_ip_prefix.get_multi(db, skip=(page-1)*size, limit=size, **kwargs)
+    _total = await crud_ip_prefix.count(db)
+    return PaginatedResponse.build([IpPrefixRead.model_validate(p) for p in prefixes], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=IpPrefixRead, status_code=status.HTTP_201_CREATED)
@@ -122,8 +124,8 @@ async def get_available_ips(
     prefix_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    limit: int = 50,
-) -> list[str]:
+    size: int = 100,
+) -> PaginatedResponse[str]:
     prefix = await crud_ip_prefix.get(db, prefix_id)
     if prefix is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prefix not found.")
@@ -135,9 +137,9 @@ async def get_prefix_ip_addresses(
     prefix_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 200,
-) -> list[IpAddressRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[IpAddressRead]:
     prefix = await crud_ip_prefix.get(db, prefix_id)
     if prefix is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prefix not found.")

@@ -19,6 +19,7 @@ from app.models.interface import Interface
 from app.schemas.cable import CableRead, InterfaceMinimal
 from app.schemas.device import DeviceRead
 from app.schemas.interface import InterfaceRead, InterfaceUpdate
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/patch-panels", tags=["patch-panels"])
 
@@ -33,21 +34,22 @@ class PatchPortDetail(BaseModel):
     cable_id: int | None = None
 
 
-@router.get("/", response_model=list[DeviceRead])
+@router.get("/", response_model=PaginatedResponse[DeviceRead])
 async def list_patch_panels(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     site_id: int | None = None,
-    skip: int = 0,
-    limit: int = 100,
-) -> list[DeviceRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[DeviceRead]:
     stmt = select(Device).where(Device.device_type == DeviceType.patch_panel)
     if site_id is not None:
         stmt = stmt.where(Device.site_id == site_id)
     stmt = stmt.offset(skip).limit(limit)
     result = await db.execute(stmt)
     devices = result.scalars().all()
-    return [DeviceRead.model_validate(d) for d in devices]
+    _total = len(devices)
+    return PaginatedResponse.build([DeviceRead.model_validate(d) for d in devices], total=_total, page=1, size=_total or 1)
 
 
 @router.get("/{panel_id}/ports", response_model=list[PatchPortDetail])
@@ -55,7 +57,7 @@ async def get_patch_panel_ports(
     panel_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[PatchPortDetail]:
+) -> PaginatedResponse[PatchPortDetail]:
     device = await crud_device.get(db, panel_id)
     if device is None or device.device_type != DeviceType.patch_panel:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patch panel not found.")

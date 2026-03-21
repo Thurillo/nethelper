@@ -11,23 +11,25 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.schemas.cabinet import CabinetCreate, CabinetRead, CabinetUpdate, RackDiagram
 from app.schemas.device import DeviceRead
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/cabinets", tags=["cabinets"])
 
 
-@router.get("/", response_model=list[CabinetRead])
+@router.get("/", response_model=PaginatedResponse[CabinetRead])
 async def list_cabinets(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 100,
+    page: int = 1,
+    size: int = 100,
     site_id: int | None = None,
-) -> list[CabinetRead]:
+) -> PaginatedResponse[CabinetRead]:
     kwargs = {}
     if site_id is not None:
         kwargs["site_id"] = site_id
-    cabinets = await crud_cabinet.get_multi(db, skip=skip, limit=limit, **kwargs)
-    return [CabinetRead.model_validate(c) for c in cabinets]
+    cabinets = await crud_cabinet.get_multi(db, skip=(page-1)*size, limit=size, **kwargs)
+    _total = await crud_cabinet.count(db)
+    return PaginatedResponse.build([CabinetRead.model_validate(c) for c in cabinets], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=CabinetRead, status_code=status.HTTP_201_CREATED)
@@ -110,7 +112,7 @@ async def get_cabinet_devices(
     cabinet_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[DeviceRead]:
+) -> PaginatedResponse[DeviceRead]:
     cabinet = await crud_cabinet.get(db, cabinet_id)
     if cabinet is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cabinet not found.")

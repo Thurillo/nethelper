@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.audit_log import log_action
+from app.schemas.pagination import PaginatedResponse
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.models.scheduled_scan import ScheduledScan
@@ -43,21 +44,24 @@ class ScheduledScanRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.get("/", response_model=list[ScheduledScanRead])
+@router.get("/", response_model=PaginatedResponse[ScheduledScanRead])
 async def list_scheduled_scans(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     device_id: Optional[int] = None,
     enabled: Optional[bool] = None,
-) -> list[ScheduledScanRead]:
+) -> PaginatedResponse[ScheduledScanRead]:
     stmt = select(ScheduledScan)
     if device_id is not None:
         stmt = stmt.where(ScheduledScan.device_id == device_id)
     if enabled is not None:
         stmt = stmt.where(ScheduledScan.enabled == enabled)
+    from sqlalchemy import func
+    count_result = await db.execute(select(func.count()).select_from(stmt.subquery()))
+    total = count_result.scalar_one()
     result = await db.execute(stmt)
     scans = result.scalars().all()
-    return [ScheduledScanRead.model_validate(s) for s in scans]
+    return PaginatedResponse.build([ScheduledScanRead.model_validate(s) for s in scans], total=total, page=1, size=total or 1)
 
 
 @router.post("/", response_model=ScheduledScanRead, status_code=status.HTTP_201_CREATED)

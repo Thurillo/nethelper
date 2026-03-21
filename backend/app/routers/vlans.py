@@ -13,23 +13,25 @@ from app.dependencies import get_current_user, require_admin
 from app.schemas.interface import InterfaceRead
 from app.schemas.ip_prefix import IpPrefixRead
 from app.schemas.vlan import VlanCreate, VlanRead, VlanUpdate
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/vlans", tags=["vlans"])
 
 
-@router.get("/", response_model=list[VlanRead])
+@router.get("/", response_model=PaginatedResponse[VlanRead])
 async def list_vlans(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     site_id: int | None = None,
-    skip: int = 0,
-    limit: int = 200,
-) -> list[VlanRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[VlanRead]:
     kwargs = {}
     if site_id is not None:
         kwargs["site_id"] = site_id
-    vlans = await crud_vlan.get_multi(db, skip=skip, limit=limit, **kwargs)
-    return [VlanRead.model_validate(v) for v in vlans]
+    vlans = await crud_vlan.get_multi(db, skip=(page-1)*size, limit=size, **kwargs)
+    _total = await crud_vlan.count(db)
+    return PaginatedResponse.build([VlanRead.model_validate(v) for v in vlans], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=VlanRead, status_code=status.HTTP_201_CREATED)
@@ -106,7 +108,7 @@ async def get_vlan_interfaces(
     vlan_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[InterfaceRead]:
+) -> PaginatedResponse[InterfaceRead]:
     from app.crud.interface import crud_interface
     from sqlalchemy import select
     from app.models.interface import Interface
@@ -126,7 +128,7 @@ async def get_vlan_prefixes(
     vlan_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[IpPrefixRead]:
+) -> PaginatedResponse[IpPrefixRead]:
     from sqlalchemy import select
     from app.models.ip_prefix import IpPrefix
 

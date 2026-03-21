@@ -10,20 +10,21 @@ from app.crud.ip_address import crud_ip_address
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.schemas.ip_address import IpAddressCreate, IpAddressRead, IpAddressUpdate
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/ip-addresses", tags=["ip-addresses"])
 
 
-@router.get("/", response_model=list[IpAddressRead])
+@router.get("/", response_model=PaginatedResponse[IpAddressRead])
 async def list_ip_addresses(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     device_id: Optional[int] = None,
     interface_id: Optional[int] = None,
     prefix_id: Optional[int] = None,
-    skip: int = 0,
-    limit: int = 200,
-) -> list[IpAddressRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[IpAddressRead]:
     if device_id is not None:
         ips = await crud_ip_address.get_by_device(db, device_id)
     elif interface_id is not None:
@@ -31,8 +32,9 @@ async def list_ip_addresses(
     elif prefix_id is not None:
         ips = await crud_ip_address.get_by_prefix(db, prefix_id, skip=skip, limit=limit)
     else:
-        ips = await crud_ip_address.get_multi(db, skip=skip, limit=limit)
-    return [IpAddressRead.model_validate(ip) for ip in ips]
+        ips = await crud_ip_address.get_multi(db, skip=(page-1)*size, limit=size)
+    _total = await crud_ip_address.count(db)
+    return PaginatedResponse.build([IpAddressRead.model_validate(ip) for ip in ips], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=IpAddressRead, status_code=status.HTTP_201_CREATED)

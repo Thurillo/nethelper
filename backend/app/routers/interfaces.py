@@ -14,23 +14,25 @@ from app.dependencies import get_current_user, require_admin
 from app.schemas.cable import CableRead, InterfaceMinimal
 from app.schemas.interface import InterfaceCreate, InterfaceRead, InterfaceUpdate
 from app.schemas.mac_entry import MacEntryRead
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/interfaces", tags=["interfaces"])
 
 
-@router.get("/", response_model=list[InterfaceRead])
+@router.get("/", response_model=PaginatedResponse[InterfaceRead])
 async def list_interfaces(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     device_id: int | None = None,
-    skip: int = 0,
-    limit: int = 200,
-) -> list[InterfaceRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[InterfaceRead]:
     if device_id is not None:
         interfaces = await crud_interface.get_by_device(db, device_id)
     else:
-        interfaces = await crud_interface.get_multi(db, skip=skip, limit=limit)
-    return [InterfaceRead.model_validate(i) for i in interfaces]
+        interfaces = await crud_interface.get_multi(db, skip=(page-1)*size, limit=size)
+    _total = await crud_interface.count(db)
+    return PaginatedResponse.build([InterfaceRead.model_validate(i) for i in interfaces], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=InterfaceRead, status_code=status.HTTP_201_CREATED)
@@ -116,7 +118,7 @@ async def get_interface_mac_entries(
     interface_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[MacEntryRead]:
+) -> PaginatedResponse[MacEntryRead]:
     iface = await crud_interface.get(db, interface_id)
     if iface is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Interface not found.")

@@ -12,6 +12,7 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.models.cable import Cable
 from app.schemas.cable import CableCreate, CableRead, CableUpdate, InterfaceMinimal
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/cables", tags=["cables"])
 
@@ -70,15 +71,16 @@ async def _enrich_cable(db: AsyncSession, cable: Cable) -> CableRead:
     )
 
 
-@router.get("/", response_model=list[CableRead])
+@router.get("/", response_model=PaginatedResponse[CableRead])
 async def list_cables(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 100,
-) -> list[CableRead]:
-    cables = await crud_cable.get_multi(db, skip=skip, limit=limit)
-    return [await _enrich_cable(db, c) for c in cables]
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[CableRead]:
+    cables = await crud_cable.get_multi(db, skip=(page-1)*size, limit=size)
+    _total = await crud_cable.count(db)
+    return PaginatedResponse.build([await _enrich_cable(db, c) for c in cables], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=CableRead, status_code=status.HTTP_201_CREATED)

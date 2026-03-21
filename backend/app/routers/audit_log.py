@@ -13,11 +13,12 @@ from app.dependencies import get_current_user
 from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.schemas.audit_log import AuditLogRead
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/audit-log", tags=["audit-log"])
 
 
-@router.get("/", response_model=list[AuditLogRead])
+@router.get("/", response_model=PaginatedResponse[AuditLogRead])
 async def list_audit_logs(
     current_user: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -26,13 +27,13 @@ async def list_audit_logs(
     entity_id: Optional[int] = None,
     from_dt: Optional[datetime] = None,
     to_dt: Optional[datetime] = None,
-    skip: int = 0,
-    limit: int = 100,
-) -> list[AuditLogRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[AuditLogRead]:
     logs = await get_audit_logs(
         db,
-        skip=skip,
-        limit=limit,
+        skip=(page - 1) * size,
+        limit=size,
         user_id=user_id,
         entity_table=entity_table,
         entity_id=entity_id,
@@ -49,7 +50,10 @@ async def list_audit_logs(
         )
         usernames = {row.id: row.username for row in result.all()}
 
-    return [
+    from sqlalchemy import func
+    total_result = await db.execute(select(func.count()).select_from(AuditLog))
+    total = total_result.scalar_one()
+    items = [
         AuditLogRead(
             id=log.id,
             user_id=log.user_id,
@@ -66,3 +70,4 @@ async def list_audit_logs(
         )
         for log in logs
     ]
+    return PaginatedResponse.build(items, total=total, page=page, size=size)

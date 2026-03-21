@@ -14,29 +14,31 @@ from app.schemas.scan_conflict import (
     ConflictResolveRequest,
     ScanConflictRead,
 )
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/conflicts", tags=["conflicts"])
 
 
-@router.get("/", response_model=list[ScanConflictRead])
+@router.get("/", response_model=PaginatedResponse[ScanConflictRead])
 async def list_conflicts(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     status_filter: Optional[str] = None,
     device_id: Optional[int] = None,
     conflict_type: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
-) -> list[ScanConflictRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[ScanConflictRead]:
     conflicts = await crud_scan_conflict.get_multi_filtered(
         db,
-        skip=skip,
-        limit=limit,
+        skip=(page-1)*size,
+        limit=size,
         status=status_filter,
         device_id=device_id,
         conflict_type=conflict_type,
     )
-    return [ScanConflictRead.model_validate(c) for c in conflicts]
+    _total = await crud_scan_conflict.count(db)
+    return PaginatedResponse.build([ScanConflictRead.model_validate(c) for c in conflicts], total=_total, page=page, size=size)
 
 
 @router.get("/{conflict_id}", response_model=ScanConflictRead)
@@ -117,7 +119,7 @@ async def bulk_accept_conflicts(
     request: Request,
     current_user: Annotated[object, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[ScanConflictRead]:
+) -> PaginatedResponse[ScanConflictRead]:
     results = []
     for conflict_id in body.conflict_ids:
         conflict = await crud_scan_conflict.accept_conflict(
@@ -138,7 +140,7 @@ async def bulk_reject_conflicts(
     request: Request,
     current_user: Annotated[object, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[ScanConflictRead]:
+) -> PaginatedResponse[ScanConflictRead]:
     results = []
     for conflict_id in body.conflict_ids:
         conflict = await crud_scan_conflict.reject_conflict(

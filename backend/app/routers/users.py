@@ -10,19 +10,21 @@ from app.crud.user import crud_user
 from app.database import get_db
 from app.dependencies import require_admin
 from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.get("/", response_model=list[UserRead])
+@router.get("/", response_model=PaginatedResponse[UserRead])
 async def list_users(
     _: Annotated[object, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 100,
-) -> list[UserRead]:
-    users = await crud_user.get_multi(db, skip=skip, limit=limit)
-    return [UserRead.model_validate(u) for u in users]
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[UserRead]:
+    users = await crud_user.get_multi(db, skip=(page-1)*size, limit=size)
+    _total = await crud_user.count(db)
+    return PaginatedResponse.build([UserRead.model_validate(u) for u in users], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)

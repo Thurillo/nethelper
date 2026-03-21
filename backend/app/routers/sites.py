@@ -12,17 +12,18 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.schemas.cabinet import CabinetRead
 from app.schemas.site import SiteCreate, SiteRead, SiteUpdate
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/sites", tags=["sites"])
 
 
-@router.get("/", response_model=list[SiteRead])
+@router.get("/", response_model=PaginatedResponse[SiteRead])
 async def list_sites(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 100,
-) -> list[SiteRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[SiteRead]:
     return await crud_site.get_multi_with_counts(db, skip=skip, limit=limit)
 
 
@@ -94,11 +95,12 @@ async def list_site_cabinets(
     site_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 100,
-) -> list[CabinetRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[CabinetRead]:
     site = await crud_site.get(db, site_id)
     if site is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Site not found.")
-    cabinets = await crud_cabinet.get_multi(db, skip=skip, limit=limit, site_id=site_id)
-    return [CabinetRead.model_validate(c) for c in cabinets]
+    cabinets = await crud_cabinet.get_multi(db, skip=(page-1)*size, limit=size, site_id=site_id)
+    _total = await crud_cabinet.count(db)
+    return PaginatedResponse.build([CabinetRead.model_validate(c) for c in cabinets], total=_total, page=page, size=size)

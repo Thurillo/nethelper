@@ -12,29 +12,31 @@ from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.models.scan_job import ScanStatus
 from app.schemas.scan_job import IpRangeScanRequest, ScanJobCreate, ScanJobRead
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/scan-jobs", tags=["scan-jobs"])
 
 
-@router.get("/", response_model=list[ScanJobRead])
+@router.get("/", response_model=PaginatedResponse[ScanJobRead])
 async def list_scan_jobs(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     device_id: Optional[int] = None,
     status_filter: Optional[str] = None,
     scan_type: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 50,
-) -> list[ScanJobRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[ScanJobRead]:
     jobs = await crud_scan_job.get_multi_filtered(
         db,
-        skip=skip,
-        limit=limit,
+        skip=(page-1)*size,
+        limit=size,
         device_id=device_id,
         status=status_filter,
         scan_type=scan_type,
     )
-    return [ScanJobRead.model_validate(j) for j in jobs]
+    _total = await crud_scan_job.count(db)
+    return PaginatedResponse.build([ScanJobRead.model_validate(j) for j in jobs], total=_total, page=page, size=size)
 
 
 @router.get("/{job_id}", response_model=ScanJobRead)

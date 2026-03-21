@@ -10,6 +10,7 @@ from app.crud.mac_entry import crud_mac_entry
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.schemas.mac_entry import MacEntryCreate, MacEntryRead, MacEntryUpdate, MacSearchResult
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/mac-entries", tags=["mac-entries"])
 
@@ -27,19 +28,20 @@ async def search_mac(
     )
 
 
-@router.get("/", response_model=list[MacEntryRead])
+@router.get("/", response_model=PaginatedResponse[MacEntryRead])
 async def list_mac_entries(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     device_id: int | None = None,
-    skip: int = 0,
-    limit: int = 200,
-) -> list[MacEntryRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[MacEntryRead]:
     kwargs = {}
     if device_id is not None:
         kwargs["device_id"] = device_id
-    entries = await crud_mac_entry.get_multi(db, skip=skip, limit=limit, **kwargs)
-    return [MacEntryRead.model_validate(e) for e in entries]
+    entries = await crud_mac_entry.get_multi(db, skip=(page-1)*size, limit=size, **kwargs)
+    _total = await crud_mac_entry.count(db)
+    return PaginatedResponse.build([MacEntryRead.model_validate(e) for e in entries], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=MacEntryRead, status_code=status.HTTP_201_CREATED)

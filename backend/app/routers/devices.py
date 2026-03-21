@@ -19,33 +19,35 @@ from app.schemas.interface import InterfaceRead
 from app.schemas.ip_address import IpAddressRead
 from app.schemas.mac_entry import MacEntryRead
 from app.schemas.scan_job import ScanJobCreate, ScanJobRead
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 
 
-@router.get("/", response_model=list[DeviceRead])
+@router.get("/", response_model=PaginatedResponse[DeviceRead])
 async def list_devices(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 100,
+    page: int = 1,
+    size: int = 100,
     site_id: Optional[int] = None,
     cabinet_id: Optional[int] = None,
     device_type: Optional[str] = None,
     status_filter: Optional[str] = None,
     q: Optional[str] = None,
-) -> list[DeviceRead]:
+) -> PaginatedResponse[DeviceRead]:
     devices = await crud_device.search(
         db,
-        skip=skip,
-        limit=limit,
+        skip=(page-1)*size,
+        limit=size,
         site_id=site_id,
         cabinet_id=cabinet_id,
         device_type=device_type,
         status=status_filter,
         q=q,
     )
-    return [DeviceRead.model_validate(d) for d in devices]
+    _total = await crud_device.count(db)
+    return PaginatedResponse.build([DeviceRead.model_validate(d) for d in devices], total=_total, page=page, size=size)
 
 
 @router.post("/", response_model=DeviceRead, status_code=status.HTTP_201_CREATED)
@@ -116,7 +118,7 @@ async def get_device_interfaces(
     device_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[InterfaceRead]:
+) -> PaginatedResponse[InterfaceRead]:
     device = await crud_device.get(db, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
@@ -129,7 +131,7 @@ async def get_device_ip_addresses(
     device_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[IpAddressRead]:
+) -> PaginatedResponse[IpAddressRead]:
     device = await crud_device.get(db, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
@@ -142,7 +144,7 @@ async def get_device_mac_entries(
     device_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[MacEntryRead]:
+) -> PaginatedResponse[MacEntryRead]:
     device = await crud_device.get(db, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
@@ -155,9 +157,9 @@ async def get_device_scan_jobs(
     device_id: int,
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    skip: int = 0,
-    limit: int = 20,
-) -> list[ScanJobRead]:
+    page: int = 1,
+    size: int = 100,
+) -> PaginatedResponse[ScanJobRead]:
     device = await crud_device.get(db, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
