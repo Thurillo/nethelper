@@ -113,6 +113,7 @@ class DeviceRead(BaseModel):
     is_unmanaged_suspected: bool
     created_at: datetime
     updated_at: datetime
+    cabinet_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -122,6 +123,13 @@ class DeviceRead(BaseModel):
         if instance.mac_address:
             from app.core.mac import mac_to_cisco
             instance.mac_address_cisco = mac_to_cisco(instance.mac_address)
+        # Populate cabinet_name from the loaded relationship if present
+        try:
+            cabinet = getattr(obj, "cabinet", None)
+            if cabinet is not None:
+                instance.cabinet_name = cabinet.name
+        except Exception:
+            pass
         return instance
 
 

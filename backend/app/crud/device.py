@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.base import CRUDBase
 from app.models.device import Device
@@ -24,6 +25,36 @@ class CRUDDevice(CRUDBase[Device, DeviceCreate, DeviceUpdate]):
         )
         return list(result.scalars().all())
 
+    def _build_filter_stmt(
+        self,
+        base_stmt,
+        site_id: Optional[int] = None,
+        cabinet_id: Optional[int] = None,
+        device_type: Optional[str] = None,
+        exclude_device_type: Optional[str] = None,
+        status: Optional[str] = None,
+        q: Optional[str] = None,
+    ):
+        """Apply shared WHERE conditions to any statement."""
+        if site_id is not None:
+            base_stmt = base_stmt.where(Device.site_id == site_id)
+        if cabinet_id is not None:
+            base_stmt = base_stmt.where(Device.cabinet_id == cabinet_id)
+        if device_type is not None:
+            base_stmt = base_stmt.where(Device.device_type == device_type)
+        if exclude_device_type is not None:
+            base_stmt = base_stmt.where(Device.device_type != exclude_device_type)
+        if status is not None:
+            base_stmt = base_stmt.where(Device.status == status)
+        if q:
+            base_stmt = base_stmt.where(
+                or_(
+                    Device.name.ilike(f"%{q}%"),
+                    Device.primary_ip.ilike(f"%{q}%"),
+                )
+            )
+        return base_stmt
+
     async def search(
         self,
         db: AsyncSession,
@@ -32,28 +63,44 @@ class CRUDDevice(CRUDBase[Device, DeviceCreate, DeviceUpdate]):
         site_id: Optional[int] = None,
         cabinet_id: Optional[int] = None,
         device_type: Optional[str] = None,
+        exclude_device_type: Optional[str] = None,
         status: Optional[str] = None,
         q: Optional[str] = None,
     ) -> list[Device]:
-        stmt = select(Device)
-        if site_id is not None:
-            stmt = stmt.where(Device.site_id == site_id)
-        if cabinet_id is not None:
-            stmt = stmt.where(Device.cabinet_id == cabinet_id)
-        if device_type is not None:
-            stmt = stmt.where(Device.device_type == device_type)
-        if status is not None:
-            stmt = stmt.where(Device.status == status)
-        if q:
-            stmt = stmt.where(
-                or_(
-                    Device.name.ilike(f"%{q}%"),
-                    Device.primary_ip.ilike(f"%{q}%"),
-                )
-            )
+        stmt = self._build_filter_stmt(
+            select(Device).options(selectinload(Device.cabinet)),
+            site_id=site_id,
+            cabinet_id=cabinet_id,
+            device_type=device_type,
+            exclude_device_type=exclude_device_type,
+            status=status,
+            q=q,
+        )
         stmt = stmt.offset(skip).limit(limit)
         result = await db.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_filtered(
+        self,
+        db: AsyncSession,
+        site_id: Optional[int] = None,
+        cabinet_id: Optional[int] = None,
+        device_type: Optional[str] = None,
+        exclude_device_type: Optional[str] = None,
+        status: Optional[str] = None,
+        q: Optional[str] = None,
+    ) -> int:
+        stmt = self._build_filter_stmt(
+            select(func.count()).select_from(Device),
+            site_id=site_id,
+            cabinet_id=cabinet_id,
+            device_type=device_type,
+            exclude_device_type=exclude_device_type,
+            status=status,
+            q=q,
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one()
 
     def _encrypt_sensitive_fields(self, data: dict) -> dict:
         """Encrypt password/credential fields before storing."""

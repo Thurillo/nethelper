@@ -19,7 +19,8 @@ import { format } from 'date-fns'
 import { it } from 'date-fns/locale'
 import type { Device, DeviceCreate, DeviceType, DeviceStatus, DeviceFilters } from '../types'
 
-const DEVICE_TYPES: DeviceType[] = ['switch', 'router', 'ap', 'server', 'patch_panel', 'firewall', 'ups', 'workstation', 'printer', 'camera', 'phone', 'other']
+// Patch panel are managed via the dedicated Patch Panel section
+const DEVICE_TYPES: DeviceType[] = ['switch', 'router', 'ap', 'server', 'firewall', 'ups', 'workstation', 'printer', 'camera', 'phone', 'other']
 
 /** Convert any MAC to Cisco XXXX.XXXX.XXXX for display purposes. */
 function macToCisco(mac: string): string {
@@ -50,7 +51,7 @@ const DevicesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Device | null>(null)
 
-  const { data, isLoading } = useDevices({ ...filters, search: search || undefined, page, size: 20 })
+  const { data, isLoading } = useDevices({ ...filters, search: search || undefined, page, size: 20, exclude_device_type: 'patch_panel' })
   const { data: sitesData } = useQuery({ queryKey: ['sites', 'all'], queryFn: () => sitesApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: cabinetsData } = useQuery({ queryKey: ['cabinets', 'all'], queryFn: () => cabinetsApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: vendorsData } = useQuery({ queryKey: ['vendors', 'all'], queryFn: () => vendorsApi.list({ size: 100 }), staleTime: 60_000 })
@@ -103,7 +104,7 @@ const DevicesPage: React.FC = () => {
         ? <span className="text-gray-500 font-mono text-xs" title={`Cisco: ${d.mac_address_cisco ?? '—'}`}>{d.mac_address}</span>
         : <span className="text-gray-300 text-xs">—</span>
     )},
-    { key: 'cabinet', header: 'Armadio', render: (d) => <span className="text-gray-500 text-xs">{d.cabinet?.name ?? '—'}</span> },
+    { key: 'cabinet', header: 'Armadio', render: (d) => <span className="text-gray-500 text-xs">{d.cabinet_name ?? '—'}</span> },
     { key: 'status', header: 'Stato', render: (d) => <DeviceStatusBadge status={d.status} /> },
     { key: 'last_scan_at', header: 'Ultimo scan', render: (d) => <span className="text-gray-400 text-xs">{d.last_scan_at ? format(new Date(d.last_scan_at), 'dd/MM HH:mm', { locale: it }) : '—'}</span> },
   ]

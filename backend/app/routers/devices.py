@@ -33,21 +33,21 @@ async def list_devices(
     site_id: Optional[int] = None,
     cabinet_id: Optional[int] = None,
     device_type: Optional[str] = None,
+    exclude_device_type: Optional[str] = None,
     status_filter: Optional[str] = None,
     q: Optional[str] = None,
 ) -> PaginatedResponse[DeviceRead]:
-    devices = await crud_device.search(
-        db,
-        skip=(page-1)*size,
-        limit=size,
+    filter_kwargs = dict(
         site_id=site_id,
         cabinet_id=cabinet_id,
         device_type=device_type,
+        exclude_device_type=exclude_device_type,
         status=status_filter,
         q=q,
     )
-    _total = await crud_device.count(db)
-    return PaginatedResponse.build([DeviceRead.model_validate(d) for d in devices], total=_total, page=page, size=size)
+    devices = await crud_device.search(db, skip=(page - 1) * size, limit=size, **filter_kwargs)
+    total = await crud_device.count_filtered(db, **filter_kwargs)
+    return PaginatedResponse.build([DeviceRead.model_validate(d) for d in devices], total=total, page=page, size=size)
 
 
 @router.post("/", response_model=DeviceRead, status_code=status.HTTP_201_CREATED)

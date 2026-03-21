@@ -164,6 +164,7 @@ export interface Device {
   asset_tag: string | null
   cabinet_id: number | null
   cabinet?: Cabinet
+  cabinet_name?: string | null
   u_position: number | null
   u_height: number
   vendor_id: number | null
@@ -637,6 +638,7 @@ export interface DeviceFilters {
   site_id?: number
   cabinet_id?: number
   device_type?: DeviceType
+  exclude_device_type?: DeviceType
   status?: DeviceStatus
   search?: string
   page?: number
