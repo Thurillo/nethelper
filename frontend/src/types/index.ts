@@ -187,6 +187,7 @@ export interface DeviceCreate {
   snmp_v3_auth_protocol?: string | null
   snmp_v3_priv_protocol?: string | null
   ssh_username?: string | null
+  ssh_password?: string | null
   ssh_port?: number
   notes?: string | null
 }

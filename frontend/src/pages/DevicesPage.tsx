@@ -27,7 +27,7 @@ const defaultForm: DeviceCreate = {
   primary_ip: null, management_ip: null, serial_number: null,
   asset_tag: null, cabinet_id: null, u_position: null, u_height: 1,
   vendor_id: null, model: null, os_version: null,
-  snmp_community: null, snmp_version: 2, ssh_username: null, ssh_port: 22, notes: null,
+  snmp_community: null, snmp_version: 2, ssh_username: null, ssh_password: null, ssh_port: 22, notes: null,
 }
 
 const DevicesPage: React.FC = () => {
@@ -72,7 +72,7 @@ const DevicesPage: React.FC = () => {
       cabinet_id: d.cabinet_id, u_position: d.u_position, u_height: d.u_height,
       vendor_id: d.vendor_id, model: d.model, os_version: d.os_version,
       snmp_community: d.snmp_community, snmp_version: d.snmp_version,
-      ssh_username: d.ssh_username, ssh_port: d.ssh_port, notes: d.notes,
+      ssh_username: d.ssh_username, ssh_password: null, ssh_port: d.ssh_port, notes: d.notes,
     })
     setError(null)
     setIsModalOpen(true)
@@ -220,6 +220,7 @@ const DevicesPage: React.FC = () => {
                 </select>
               </div>
               {f('Username SSH', 'ssh_username')}
+              {f('Password SSH', 'ssh_password', 'password')}
               {f('Porta SSH', 'ssh_port', 'number')}
             </div>
           </details>
