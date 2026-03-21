@@ -575,6 +575,29 @@ export interface PatchPanelPortUpdate {
   notes?: string | null
 }
 
+// Corrisponde a InterfaceMinimal del backend (schemas/cable.py)
+export interface InterfaceMinimal {
+  id: number
+  name: string
+  label: string | null
+  device_id: number
+  device_name: string | null
+}
+
+// Corrisponde a PatchPortDetail del backend (routers/patch_panels.py)
+export interface PatchPortDetail {
+  interface: {
+    id: number
+    name: string
+    label: string | null
+    room_destination: string | null
+    notes: string | null
+    device_id: number
+  }
+  linked_interface: InterfaceMinimal | null
+  cable_id: number | null
+}
+
 // ============================================================
 // SCHEDULED SCANS
 // ============================================================

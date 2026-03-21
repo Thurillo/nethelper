@@ -1,7 +1,14 @@
 import apiClient from './client'
-import type { Device, PatchPanelPort, PatchPanelPortUpdate, PaginatedResponse } from '../types'
+import type { Device, PatchPortDetail, PaginatedResponse } from '../types'
+
+export interface InterfaceUpdateBody {
+  label?: string | null
+  room_destination?: string | null
+  notes?: string | null
+}
 
 export const patchPanelsApi = {
+  /** Lista di tutti i dispositivi patch_panel */
   list: async (params?: { site_id?: number; cabinet_id?: number; page?: number; size?: number }): Promise<PaginatedResponse<Device>> => {
     const response = await apiClient.get<PaginatedResponse<Device>>('/devices', {
       params: { ...params, device_type: 'patch_panel' },
@@ -9,31 +16,26 @@ export const patchPanelsApi = {
     return response.data
   },
 
-  getPorts: async (deviceId: number): Promise<PatchPanelPort[]> => {
-    const response = await apiClient.get<PatchPanelPort[]>(`/devices/${deviceId}/patch-panel-ports`)
+  /** Porte di un patch panel — endpoint corretto: /patch-panels/{id}/ports */
+  getPorts: async (deviceId: number): Promise<PatchPortDetail[]> => {
+    const response = await apiClient.get<PatchPortDetail[]>(`/patch-panels/${deviceId}/ports`)
     return response.data
   },
 
-  updatePort: async (deviceId: number, portNumber: number, data: PatchPanelPortUpdate): Promise<PatchPanelPort> => {
-    const response = await apiClient.patch<PatchPanelPort>(
-      `/devices/${deviceId}/patch-panel-ports/${portNumber}`,
-      data
-    )
-    return response.data
+  /** Aggiorna etichetta / stanza / note di una porta (portId = interface.id) */
+  updatePort: async (deviceId: number, portId: number, data: InterfaceUpdateBody): Promise<void> => {
+    await apiClient.patch(`/patch-panels/${deviceId}/ports/${portId}`, data)
   },
 
-  linkPort: async (deviceId: number, portNumber: number, interfaceId: number): Promise<PatchPanelPort> => {
-    const response = await apiClient.post<PatchPanelPort>(
-      `/devices/${deviceId}/patch-panel-ports/${portNumber}/link`,
-      { interface_id: interfaceId }
-    )
-    return response.data
+  /** Collega una porta a un'interfaccia di switch (crea cavo) */
+  linkPort: async (deviceId: number, portId: number, targetInterfaceId: number): Promise<void> => {
+    await apiClient.post(`/patch-panels/${deviceId}/ports/${portId}/link`, {
+      target_interface_id: targetInterfaceId,
+    })
   },
 
-  unlinkPort: async (deviceId: number, portNumber: number): Promise<PatchPanelPort> => {
-    const response = await apiClient.post<PatchPanelPort>(
-      `/devices/${deviceId}/patch-panel-ports/${portNumber}/unlink`
-    )
-    return response.data
+  /** Rimuove il collegamento (elimina cavo) */
+  unlinkPort: async (deviceId: number, portId: number): Promise<void> => {
+    await apiClient.delete(`/patch-panels/${deviceId}/ports/${portId}/link`)
   },
 }

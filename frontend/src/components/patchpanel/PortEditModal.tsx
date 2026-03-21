@@ -3,14 +3,20 @@ import Modal from '../common/Modal'
 import { patchPanelsApi } from '../../api/patchPanels'
 import { useDevices } from '../../hooks/useDevices'
 import { devicesApi } from '../../api/devices'
-import type { PatchPanelPort, NetworkInterface } from '../../types'
+import type { PatchPortDetail, NetworkInterface } from '../../types'
 
 interface PortEditModalProps {
   isOpen: boolean
   onClose: () => void
-  port: PatchPanelPort | null
+  port: PatchPortDetail | null
   deviceId: number
   onSaved: () => void
+}
+
+/** Estrae il numero porta dal nome (es. "port-5" → 5) */
+function extractPortNumber(name: string): string {
+  const m = name.match(/(\d+)$/)
+  return m ? m[1] : name
 }
 
 const PortEditModal: React.FC<PortEditModalProps> = ({ isOpen, onClose, port, deviceId, onSaved }) => {
@@ -27,16 +33,20 @@ const PortEditModal: React.FC<PortEditModalProps> = ({ isOpen, onClose, port, de
 
   useEffect(() => {
     if (port) {
-      setLabel(port.label ?? '')
-      setRoomDestination(port.room_destination ?? '')
-      setNotes(port.notes ?? '')
-      setSelectedInterfaceId(port.linked_interface_id ?? '')
+      setLabel(port.interface.label ?? '')
+      setRoomDestination(port.interface.room_destination ?? '')
+      setNotes(port.interface.notes ?? '')
+      setSelectedInterfaceId(port.linked_interface?.id ?? '')
+      setSelectedSwitchId('')
+      setSwitchInterfaces([])
     }
   }, [port])
 
   useEffect(() => {
     if (selectedSwitchId) {
-      devicesApi.getInterfaces(selectedSwitchId as number).then(setSwitchInterfaces).catch(() => setSwitchInterfaces([]))
+      devicesApi.getInterfaces(selectedSwitchId as number)
+        .then(setSwitchInterfaces)
+        .catch(() => setSwitchInterfaces([]))
     } else {
       setSwitchInterfaces([])
     }
@@ -48,26 +58,46 @@ const PortEditModal: React.FC<PortEditModalProps> = ({ isOpen, onClose, port, de
     setIsLoading(true)
     setError(null)
     try {
-      await patchPanelsApi.updatePort(deviceId, port.port_number, {
+      const portId = port.interface.id
+
+      // 1. Salva metadati (label, stanza, note)
+      await patchPanelsApi.updatePort(deviceId, portId, {
         label: label || null,
         room_destination: roomDestination || null,
-        linked_interface_id: selectedInterfaceId ? Number(selectedInterfaceId) : null,
         notes: notes || null,
       })
+
+      // 2. Gestione collegamento switch
+      const newLinkId = selectedInterfaceId ? Number(selectedInterfaceId) : null
+      const oldLinkId = port.linked_interface?.id ?? null
+
+      if (newLinkId !== oldLinkId) {
+        // Rimuove vecchio collegamento se esisteva
+        if (oldLinkId && port.cable_id) {
+          await patchPanelsApi.unlinkPort(deviceId, portId)
+        }
+        // Crea nuovo collegamento se selezionato
+        if (newLinkId) {
+          await patchPanelsApi.linkPort(deviceId, portId, newLinkId)
+        }
+      }
+
       onSaved()
       onClose()
-    } catch {
-      setError('Errore durante il salvataggio')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Errore durante il salvataggio'
+      setError(msg)
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleUnlink = async () => {
-    if (!port) return
+    if (!port || !port.cable_id) return
     setIsLoading(true)
+    setError(null)
     try {
-      await patchPanelsApi.unlinkPort(deviceId, port.port_number)
+      await patchPanelsApi.unlinkPort(deviceId, port.interface.id)
       setSelectedInterfaceId('')
       onSaved()
       onClose()
@@ -78,15 +108,20 @@ const PortEditModal: React.FC<PortEditModalProps> = ({ isOpen, onClose, port, de
     }
   }
 
+  const portNum = port ? extractPortNumber(port.interface.name) : '—'
+  const currentLinkLabel = port?.linked_interface
+    ? `${port.linked_interface.device_name ?? '?'} → ${port.linked_interface.name}`
+    : null
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={`Modifica porta ${port?.port_number}`}
+      title={`Modifica porta ${portNum}`}
       size="md"
       footer={
         <>
-          {port?.linked_interface_id && (
+          {port?.linked_interface && (
             <button
               type="button"
               onClick={handleUnlink}
@@ -96,17 +131,21 @@ const PortEditModal: React.FC<PortEditModalProps> = ({ isOpen, onClose, port, de
               Rimuovi collegamento
             </button>
           )}
-          <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+          <button type="button" onClick={onClose} disabled={isLoading}
+            className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
             Annulla
           </button>
-          <button type="submit" form="port-edit-form" disabled={isLoading} className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50">
+          <button type="submit" form="port-edit-form" disabled={isLoading}
+            className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50">
             {isLoading ? 'Salvataggio...' : 'Salva'}
           </button>
         </>
       }
     >
       <form id="port-edit-form" onSubmit={handleSave} className="space-y-4">
-        {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Etichetta porta</label>
@@ -120,18 +159,30 @@ const PortEditModal: React.FC<PortEditModalProps> = ({ isOpen, onClose, port, de
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Stanza di destinazione</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Destinazione fisica</label>
           <input
             type="text"
             value={roomDestination}
             onChange={(e) => setRoomDestination(e.target.value)}
-            placeholder="es. Stanza 101, Piano 2"
+            placeholder="es. Ufficio A, Stanza 101, Piano 2"
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
+          <p className="text-xs text-gray-400 mt-1">Dove esce fisicamente questo cavo</p>
         </div>
 
+        {/* Collegamento attuale */}
+        {currentLinkLabel && (
+          <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            <p className="text-xs text-gray-500 mb-0.5">Collegata a</p>
+            <p className="text-sm font-medium text-green-800 font-mono">{currentLinkLabel}</p>
+          </div>
+        )}
+
+        {/* Nuovo collegamento switch */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Collega a switch</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {currentLinkLabel ? 'Cambia collegamento switch' : 'Collega a switch'}
+          </label>
           <select
             value={selectedSwitchId}
             onChange={(e) => setSelectedSwitchId(e.target.value ? Number(e.target.value) : '')}

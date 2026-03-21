@@ -45,6 +45,8 @@ async def list_patch_panels(
     stmt = select(Device).where(Device.device_type == DeviceType.patch_panel)
     if site_id is not None:
         stmt = stmt.where(Device.site_id == site_id)
+    skip = (page - 1) * size
+    limit = size
     stmt = stmt.offset(skip).limit(limit)
     result = await db.execute(stmt)
     devices = result.scalars().all()
