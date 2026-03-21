@@ -1,36 +1,62 @@
 """Script to create an admin user.
 
-Usage:
+Usage (interactive):
     cd backend
     python -m app.scripts.create_admin
+
+Usage (non-interactive, e.g. from setup.sh):
+    python -m app.scripts.create_admin --username admin --password secret
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
+import getpass
 import sys
 
 
+def _parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument("--username", default=None)
+    p.add_argument("--email",    default=None)
+    p.add_argument("--password", default=None)
+    return p.parse_known_args()[0]
+
+
 async def main() -> None:
-    print("=== NetHelper - Create Admin User ===")
+    args = _parse_args()
 
-    username = input("Username: ").strip()
+    print("=== NetHelper - Creazione utente admin ===")
+
+    # ── Username ──────────────────────────────────────────────────────────────
+    if args.username:
+        username = args.username.strip()
+    else:
+        username = input("Username: ").strip()
     if not username:
-        print("Error: username cannot be empty.")
+        print("Errore: username obbligatorio.")
         sys.exit(1)
 
-    email = input("Email (optional, press Enter to skip): ").strip() or None
+    # ── Email (opzionale) ─────────────────────────────────────────────────────
+    if args.email is not None:
+        email = args.email.strip() or None
+    else:
+        email = input("Email (opzionale, invio per saltare): ").strip() or None
 
-    import getpass
-    password = getpass.getpass("Password: ")
-    if not password:
-        print("Error: password cannot be empty.")
-        sys.exit(1)
+    # ── Password ──────────────────────────────────────────────────────────────
+    if args.password:
+        password = args.password
+    else:
+        password = getpass.getpass("Password: ")
+        if not password:
+            print("Errore: password obbligatoria.")
+            sys.exit(1)
+        confirm = getpass.getpass("Conferma password: ")
+        if password != confirm:
+            print("Errore: le password non corrispondono.")
+            sys.exit(1)
 
-    confirm = getpass.getpass("Confirm password: ")
-    if password != confirm:
-        print("Error: passwords do not match.")
-        sys.exit(1)
-
+    # ── DB ────────────────────────────────────────────────────────────────────
     from app.database import get_async_session
     from app.crud.user import crud_user
     from app.schemas.user import UserCreate
@@ -39,13 +65,13 @@ async def main() -> None:
     async with get_async_session() as db:
         existing = await crud_user.get_by_username(db, username)
         if existing:
-            print(f"Error: user '{username}' already exists.")
+            print(f"Errore: l'utente '{username}' esiste già.")
             sys.exit(1)
 
         if email:
             existing_email = await crud_user.get_by_email(db, email)
             if existing_email:
-                print(f"Error: email '{email}' is already in use.")
+                print(f"Errore: l'email '{email}' è già in uso.")
                 sys.exit(1)
 
         user_in = UserCreate(
@@ -55,11 +81,11 @@ async def main() -> None:
             role=UserRole.admin,
         )
         user = await crud_user.create(db, user_in)
-        print(f"\nAdmin user created successfully!")
+        print(f"\nUtente admin creato con successo!")
         print(f"  ID:       {user.id}")
         print(f"  Username: {user.username}")
-        print(f"  Email:    {user.email or '(none)'}")
-        print(f"  Role:     {user.role.value}")
+        print(f"  Email:    {user.email or '(nessuna)'}")
+        print(f"  Ruolo:    {user.role.value}")
 
 
 if __name__ == "__main__":
