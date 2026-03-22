@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Columns3 } from 'lucide-react'
+import { Plus, Columns3, Download } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { devicesApi } from '../api/devices'
 import { sitesApi } from '../api/sites'
@@ -104,6 +104,32 @@ const DevicesPage: React.FC = () => {
   }
   const closeModal = () => { setIsModalOpen(false); setEditing(null); setError(null) }
 
+  const exportCsv = async () => {
+    const all = await devicesApi.list({ ...filters, search: search || undefined, size: 9999, exclude_device_type: 'patch_panel' })
+    const rows = all.items
+    const headers = ['Nome', 'Tipo', 'Stato', 'IP Primario', 'MAC', 'Armadio', 'Vendor', 'Modello', 'IP Gestione', 'Ultimo scan', 'Note']
+    const escape = (v: string | null | undefined) => {
+      if (v == null) return ''
+      const s = String(v)
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const lines = [
+      headers.join(','),
+      ...rows.map(d => [
+        d.name, d.device_type, d.status, d.primary_ip, d.mac_address,
+        d.cabinet_name, d.vendor_name, d.model, d.management_ip,
+        d.last_seen ? new Date(d.last_seen).toLocaleString('it-IT') : '',
+        d.notes,
+      ].map(escape).join(',')),
+    ]
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `dispositivi_${new Date().toISOString().slice(0,10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name) { setError('Il nome è obbligatorio'); return }
@@ -199,8 +225,18 @@ const DevicesPage: React.FC = () => {
           {sitesData?.items.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
 
+        {/* Export CSV */}
+        <button
+          onClick={exportCsv}
+          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 ml-auto"
+          title="Esporta CSV"
+        >
+          <Download size={14} />
+          CSV
+        </button>
+
         {/* Column visibility toggle */}
-        <div className="relative ml-auto" ref={colMenuRef}>
+        <div className="relative" ref={colMenuRef}>
           <button
             onClick={() => setColMenuOpen(p => !p)}
             className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
