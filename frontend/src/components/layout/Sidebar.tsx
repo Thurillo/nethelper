@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Server, Network, GitBranch, Grid3X3,
   Layers, Globe, Scan, Clock, AlertTriangle, History, Users,
-  Building2, LogOut, ChevronLeft, ChevronRight, Wifi, Cable
+  Building2, LogOut, ChevronLeft, ChevronRight, Wifi, Cable, HardDrive
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '../../store/authStore'
@@ -44,6 +44,7 @@ const scanNav: NavItem[] = [
 const adminNav: NavItem[] = [
   { to: '/utenti', icon: <Users size={17} />,    label: 'Utenti' },
   { to: '/vendor', icon: <Building2 size={17} />, label: 'Vendor' },
+  { to: '/backup', icon: <HardDrive size={17} />, label: 'Backup & Restore', adminOnly: true },
 ]
 
 interface NavGroupProps {

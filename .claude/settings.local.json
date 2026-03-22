@@ -155,7 +155,21 @@
       "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper/backend && PYTHONPATH=/opt/nethelper/backend source /opt/nethelper/venv/bin/activate && PYTHONPATH=/opt/nethelper/backend /opt/nethelper/venv/bin/alembic upgrade head 2>&1\")",
       "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper/backend && PYTHONPATH=/opt/nethelper/backend /opt/nethelper/venv/bin/alembic current 2>&1 && PYTHONPATH=/opt/nethelper/backend /opt/nethelper/venv/bin/alembic upgrade head 2>&1\")",
       "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper && git pull && cd backend && PYTHONPATH=/opt/nethelper/backend /opt/nethelper/venv/bin/alembic upgrade head 2>&1 && systemctl list-units | grep nethelper\")",
-      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"systemctl restart nethelper-backend && cd /opt/nethelper/frontend && npm run build 2>&1 | tail -3\")"
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"systemctl restart nethelper-backend && cd /opt/nethelper/frontend && npm run build 2>&1 | tail -3\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper && git pull && cd frontend && npm run build 2>&1 | tail -3 && systemctl restart nethelper-backend\")",
+      "Bash(ssh nethelper-prod:*)",
+      "Bash(ssh 192.168.1.3 \"cd /opt/nethelper && git pull && source venv/bin/activate && cd backend && PYTHONPATH=/opt/nethelper/backend alembic upgrade head && cd /opt/nethelper/frontend && npm run build && systemctl restart nethelper-api nethelper-worker && systemctl is-active nethelper-api nethelper-worker\")",
+      "Bash(ssh nethelper@192.168.1.3 \"cd /opt/nethelper && git pull && source venv/bin/activate && cd backend && PYTHONPATH=/opt/nethelper/backend alembic upgrade head && cd /opt/nethelper/frontend && npm run build && sudo systemctl restart nethelper-api nethelper-worker && systemctl is-active nethelper-api nethelper-worker\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper && git pull && source venv/bin/activate && cd backend && PYTHONPATH=/opt/nethelper/backend alembic upgrade head 2>&1 | tail -5\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper/frontend && npm run build 2>&1 | tail -8 && systemctl restart nethelper-api nethelper-worker && sleep 2 && systemctl is-active nethelper-api nethelper-worker\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"systemctl list-units --type=service | grep nethelper\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"systemctl restart nethelper-backend nethelper-worker && sleep 2 && systemctl is-active nethelper-backend nethelper-worker\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper && git pull && cd frontend && npm run build 2>&1 | tail -4\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper/frontend && npm run build 2>&1 | tail -5\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"grep -n ''vendor'' /opt/nethelper/backend/app/schemas/device.py\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"grep -n ''vendor\\\\|cabinet_name\\\\|class Device'' /opt/nethelper/backend/app/schemas/device.py | head -30\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"sed -n ''88,135p'' /opt/nethelper/backend/app/schemas/device.py\")",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 'cat /opt/nethelper/backend/app/schemas/device.py')"
     ]
   }
 }

@@ -87,6 +87,7 @@ def create_app() -> FastAPI:
     from app.routers import (
         audit_log,
         auth,
+        backup,
         cabinets,
         cables,
         conflicts,
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     app.include_router(patch_panels.router, prefix=api_prefix)
     app.include_router(switches.router, prefix=api_prefix)
     app.include_router(connections.router, prefix=api_prefix)
+    app.include_router(backup.router, prefix=api_prefix)
 
     # ----------------------------------------------------------------
     # Health check
