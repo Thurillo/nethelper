@@ -165,7 +165,7 @@ async def get_device_scan_jobs(
     device = await crud_device.get(db, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
-    jobs = await crud_scan_job.get_by_device(db, device_id, skip=skip, limit=limit)
+    jobs = await crud_scan_job.get_by_device(db, device_id, skip=(page - 1) * size, limit=size)
     return [ScanJobRead.model_validate(j) for j in jobs]
 
 

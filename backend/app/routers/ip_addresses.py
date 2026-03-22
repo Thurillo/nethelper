@@ -30,7 +30,7 @@ async def list_ip_addresses(
     elif interface_id is not None:
         ips = await crud_ip_address.get_by_interface(db, interface_id)
     elif prefix_id is not None:
-        ips = await crud_ip_address.get_by_prefix(db, prefix_id, skip=skip, limit=limit)
+        ips = await crud_ip_address.get_by_prefix(db, prefix_id, skip=(page - 1) * size, limit=size)
     else:
         ips = await crud_ip_address.get_multi(db, skip=(page-1)*size, limit=size)
     _total = await crud_ip_address.count(db)
