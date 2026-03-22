@@ -14,7 +14,7 @@ from app.crud.scan_job import crud_scan_job
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.models.scan_job import ScanStatus
-from app.schemas.device import DeviceCreate, DeviceRead, DeviceScanRequest, DeviceUpdate
+from app.schemas.device import DeviceBulkCreateRequest, DeviceBulkCreateResponse, DeviceCreate, DeviceRead, DeviceScanRequest, DeviceUpdate
 from app.schemas.interface import InterfaceRead
 from app.schemas.ip_address import IpAddressRead
 from app.schemas.mac_entry import MacEntryRead
@@ -50,6 +50,44 @@ async def list_devices(
     devices = await crud_device.search(db, skip=(page - 1) * size, limit=size, **filter_kwargs)
     total = await crud_device.count_filtered(db, **filter_kwargs)
     return PaginatedResponse.build([DeviceRead.model_validate(d) for d in devices], total=total, page=page, size=size)
+
+
+@router.post("/bulk", response_model=DeviceBulkCreateResponse, status_code=status.HTTP_200_OK)
+async def bulk_create_devices(
+    body: DeviceBulkCreateRequest,
+    request: Request,
+    current_user: Annotated[object, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DeviceBulkCreateResponse:
+    created = 0
+    skipped = 0
+    errors: list[str] = []
+    client_ip = getattr(request.state, "client_ip", None)
+    for item in body.devices:
+        try:
+            if item.primary_ip and body.skip_duplicates:
+                existing = await crud_device.get_by_ip(db, item.primary_ip)
+                if existing:
+                    skipped += 1
+                    continue
+            device_data = DeviceCreate(
+                name=item.name,
+                primary_ip=item.primary_ip,
+                device_type=item.device_type,
+                status=item.status,
+                cabinet_id=item.cabinet_id,
+                vendor_id=item.vendor_id,
+                model=item.model,
+                mac_address=item.mac_address,
+            )
+            device = await crud_device.create(db, device_data)
+            await log_action(db, user_id=current_user.id, action="create", entity_table="device",
+                             entity_id=device.id, client_ip=client_ip,
+                             description=f"Bulk created device '{device.name}'.")
+            created += 1
+        except Exception as e:
+            errors.append(f"{item.name} ({item.primary_ip}): {str(e)[:100]}")
+    return DeviceBulkCreateResponse(created=created, skipped=skipped, errors=errors)
 
 
 @router.post("/", response_model=DeviceRead, status_code=status.HTTP_201_CREATED)

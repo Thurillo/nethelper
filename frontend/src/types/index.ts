@@ -47,24 +47,26 @@ export interface Vendor {
   id: number
   name: string
   slug: string
-  driver: string | null
-  snmp_community_default: string | null
-  snmp_version_default: number
-  ssh_username_default: string | null
-  ssh_password_default: string | null
-  ssh_port_default: number
+  driver_class: string | null
+  snmp_default_community: string | null
+  snmp_default_version: number
+  ssh_default_username: string | null
+  has_password: boolean
+  ssh_default_port: number
+  notes: string | null
   created_at: string
 }
 
 export interface VendorCreate {
   name: string
   slug: string
-  driver?: string | null
-  snmp_community_default?: string | null
-  snmp_version_default?: number
-  ssh_username_default?: string | null
-  ssh_password_default?: string | null
-  ssh_port_default?: number
+  driver_class?: string | null
+  snmp_default_community?: string | null
+  snmp_default_version?: number
+  ssh_default_username?: string | null
+  ssh_default_password?: string | null
+  ssh_default_port?: number
+  notes?: string | null
 }
 
 // ============================================================
@@ -180,7 +182,8 @@ export interface Device {
   snmp_v3_auth_protocol: string | null
   snmp_v3_priv_protocol: string | null
   ssh_username: string | null
-  ssh_port: number
+  ssh_port: number | null
+  ssh_key_path: string | null
   notes: string | null
   last_seen: string | null
   interfaces_count?: number
@@ -211,7 +214,30 @@ export interface DeviceCreate {
   ssh_username?: string | null
   ssh_password?: string | null
   ssh_port?: number
+  ssh_key_path?: string | null
   notes?: string | null
+}
+
+export interface DeviceBulkCreateItem {
+  name: string
+  primary_ip?: string | null
+  device_type?: DeviceType
+  status?: DeviceStatus
+  cabinet_id?: number | null
+  vendor_id?: number | null
+  model?: string | null
+  mac_address?: string | null
+}
+
+export interface DeviceBulkCreateRequest {
+  devices: DeviceBulkCreateItem[]
+  skip_duplicates?: boolean
+}
+
+export interface DeviceBulkCreateResponse {
+  created: number
+  skipped: number
+  errors: string[]
 }
 
 // ============================================================

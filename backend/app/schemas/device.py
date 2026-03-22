@@ -141,5 +141,27 @@ class DeviceRead(BaseModel):
         return instance
 
 
+class DeviceBulkCreateItem(BaseModel):
+    name: str
+    primary_ip: Optional[str] = None
+    device_type: DeviceType = DeviceType.other
+    status: DeviceStatus = DeviceStatus.active
+    cabinet_id: Optional[int] = None
+    vendor_id: Optional[int] = None
+    model: Optional[str] = None
+    mac_address: Optional[str] = None
+
+
+class DeviceBulkCreateRequest(BaseModel):
+    devices: list[DeviceBulkCreateItem]
+    skip_duplicates: bool = True
+
+
+class DeviceBulkCreateResponse(BaseModel):
+    created: int
+    skipped: int
+    errors: list[str]
+
+
 class DeviceScanRequest(BaseModel):
     scan_type: ScanType

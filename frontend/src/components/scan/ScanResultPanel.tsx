@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { XCircle, Wifi, WifiOff, PlusCircle, X, Plus, AlertTriangle } from 'lucide-react'
+import { XCircle, Wifi, WifiOff, PlusCircle, X, Plus, AlertTriangle, Download } from 'lucide-react'
+import BulkImportModal from './BulkImportModal'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useScanJobPolling, useCancelScan } from '../../hooks/useScanJobs'
 import { useCreateDevice, useDevices } from '../../hooks/useDevices'
@@ -598,6 +599,8 @@ const ScanResultPanel: React.FC<ScanResultPanelProps> = ({ job: initialJob }) =>
   const isIpRange = job.scan_type === 'ip_range'
   const [addHost, setAddHost] = useState<FoundHost | null>(null)
   const [addedIps, setAddedIps] = useState<Set<string>>(new Set())
+  const [selectedIps, setSelectedIps] = useState<Set<string>>(new Set())
+  const [showBulkModal, setShowBulkModal] = useState(false)
 
   const { data: vendorsData } = useQuery({
     queryKey: ['vendors', 'all'],
@@ -669,6 +672,15 @@ const ScanResultPanel: React.FC<ScanResultPanelProps> = ({ job: initialJob }) =>
                 </span>
                 {totalIps !== undefined && <span className="text-gray-500"> / {totalIps} IP</span>}
               </span>
+              {selectedIps.size > 0 && (
+                <button
+                  onClick={() => setShowBulkModal(true)}
+                  className="ml-auto flex items-center gap-1.5 px-3 py-1 bg-primary-600 text-white text-xs rounded-lg hover:bg-primary-700"
+                >
+                  <Download size={11} />
+                  Importa selezionati ({selectedIps.size})
+                </button>
+              )}
             </div>
 
             {foundHosts.length > 0 ? (
@@ -676,6 +688,17 @@ const ScanResultPanel: React.FC<ScanResultPanelProps> = ({ job: initialJob }) =>
                 <table className="w-full text-xs text-gray-300">
                   <thead>
                     <tr className="border-b border-gray-700 text-gray-500">
+                      <th className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={foundHosts.filter(h => !addedIps.has(h.ip)).every(h => selectedIps.has(h.ip)) && foundHosts.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedIps(new Set(foundHosts.filter(h => !addedIps.has(h.ip)).map(h => h.ip)))
+                            else setSelectedIps(new Set())
+                          }}
+                          className="rounded cursor-pointer"
+                        />
+                      </th>
                       <th className="text-left px-4 py-2">IP</th>
                       <th className="text-left px-4 py-2">MAC</th>
                       <th className="text-left px-4 py-2">Vendor</th>
@@ -688,6 +711,22 @@ const ScanResultPanel: React.FC<ScanResultPanelProps> = ({ job: initialJob }) =>
                   <tbody>
                     {foundHosts.map((h) => (
                       <tr key={h.ip} className="border-b border-gray-800 hover:bg-gray-800">
+                        <td className="px-3 py-2">
+                          <input
+                            type="checkbox"
+                            disabled={addedIps.has(h.ip)}
+                            checked={selectedIps.has(h.ip)}
+                            onChange={(e) => {
+                              setSelectedIps((prev) => {
+                                const next = new Set(prev)
+                                if (e.target.checked) next.add(h.ip)
+                                else next.delete(h.ip)
+                                return next
+                              })
+                            }}
+                            className="rounded cursor-pointer"
+                          />
+                        </td>
                         <td className="px-4 py-2 font-mono text-green-300">{h.ip}</td>
                         <td className="px-4 py-2 font-mono text-gray-400">{h.mac ?? '—'}</td>
                         <td className="px-4 py-2 text-gray-400 max-w-[140px] truncate" title={h.vendor ?? ''}>
@@ -774,6 +813,19 @@ const ScanResultPanel: React.FC<ScanResultPanelProps> = ({ job: initialJob }) =>
           allDevices={allDevices}
           onClose={() => setAddHost(null)}
           onSuccess={() => setAddedIps(prev => new Set([...prev, addHost.ip]))}
+        />
+      )}
+
+      {/* Bulk import modal */}
+      {showBulkModal && (
+        <BulkImportModal
+          hosts={foundHosts.filter((h) => selectedIps.has(h.ip))}
+          onClose={() => setShowBulkModal(false)}
+          onSuccess={(ips) => {
+            setAddedIps((prev) => new Set([...prev, ...ips]))
+            setSelectedIps(new Set())
+            setShowBulkModal(false)
+          }}
         />
       )}
     </>

@@ -97,7 +97,7 @@ const DevicesPage: React.FC = () => {
       cabinet_id: d.cabinet_id, u_position: d.u_position, u_height: d.u_height,
       vendor_id: d.vendor_id, model: d.model, os_version: d.os_version,
       snmp_community: d.snmp_community, snmp_version: d.snmp_version,
-      ssh_username: d.ssh_username, ssh_password: null, ssh_port: d.ssh_port, notes: d.notes,
+      ssh_username: d.ssh_username, ssh_password: null, ssh_port: d.ssh_port ?? undefined, notes: d.notes,
     })
     setError(null)
     setIsModalOpen(true)

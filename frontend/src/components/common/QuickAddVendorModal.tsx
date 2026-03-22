@@ -48,8 +48,8 @@ const QuickAddVendorModal: React.FC<{
     create.mutate({
       name: name.trim(),
       slug: slug.trim(),
-      snmp_version_default: 2,
-      ssh_port_default: 22,
+      snmp_default_version: 2,
+      ssh_default_port: 22,
     })
   }
 

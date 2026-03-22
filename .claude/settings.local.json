@@ -169,7 +169,18 @@
       "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"grep -n ''vendor'' /opt/nethelper/backend/app/schemas/device.py\")",
       "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"grep -n ''vendor\\\\|cabinet_name\\\\|class Device'' /opt/nethelper/backend/app/schemas/device.py | head -30\")",
       "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"sed -n ''88,135p'' /opt/nethelper/backend/app/schemas/device.py\")",
-      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 'cat /opt/nethelper/backend/app/schemas/device.py')"
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 'cat /opt/nethelper/backend/app/schemas/device.py')",
+      "Bash(head -15 grep -n \"skip\\\\|limit\" /c/Claude/GDRHelper/backend/app/routers/prefixes.py)",
+      "Bash(ssh -i ~/.ssh/id_ed25519 root@192.168.1.3 \"cd /opt/nethelper && git pull && source venv/bin/activate && systemctl restart nethelper-backend 2>&1 && echo OK\")",
+      "Bash(ssh root@192.168.1.3 \"cp -r /opt/nethelper/frontend/dist /opt/nethelper/frontend/dist.bak 2>/dev/null; cd /opt/nethelper && git pull --ff-only\")",
+      "Bash(ssh root@192.168.1.3 \"cd /opt/nethelper && git pull && cp -r frontend/dist frontend/dist.bak 2>/dev/null; cd frontend && npm run build 2>&1 | tail -5\")",
+      "Bash(ssh root@192.168.1.3 \"cd /opt/nethelper && git pull && cd frontend && npm run build 2>&1 | tail -3\")",
+      "Bash(cat /c/Claude/GDRHelper/frontend/src/api/scan*.ts)",
+      "Bash(ssh root@192.168.1.3 \"cd /opt/nethelper && git pull && cd frontend && npm run build 2>&1 | tail -3 && systemctl restart nethelper-api\")",
+      "Bash(ssh root@192.168.1.3 \"systemctl list-units --type=service | grep -i nethelper\")",
+      "Bash(ssh root@192.168.1.3 \"systemctl restart nethelper-backend\")",
+      "Bash(ssh root@192.168.1.3 \"cd /opt/nethelper && git pull && systemctl restart nethelper-backend\")",
+      "Bash(docker compose:*)"
     ]
   }
 }

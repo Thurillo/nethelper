@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { it } from 'date-fns/locale'
-import { Edit2 } from 'lucide-react'
+import { Edit2, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useDevice, useDeviceInterfaces, useDeviceIpAddresses, useDeviceMacEntries, useUpdateDevice } from '../hooks/useDevices'
 import { cabinetsApi } from '../api/cabinets'
@@ -31,6 +31,9 @@ const DeviceDetailPage: React.FC = () => {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Record<string, unknown>>({})
+  const [showCredsSection, setShowCredsSection] = useState(false)
+  const [showSnmpV3, setShowSnmpV3] = useState(false)
+  const [showSshPass, setShowSshPass] = useState(false)
 
   const { data: device, isLoading } = useDevice(deviceId)
   const { data: interfaces } = useDeviceInterfaces(deviceId)
@@ -52,8 +55,19 @@ const DeviceDetailPage: React.FC = () => {
       vendor_id: device.vendor_id ?? '',
       model: device.model ?? '',
       notes: device.notes ?? '',
+      snmp_community: device.snmp_community ?? '',
+      snmp_version: device.snmp_version ?? 2,
+      snmp_v3_username: device.snmp_v3_username ?? '',
+      snmp_v3_auth_protocol: device.snmp_v3_auth_protocol ?? '',
+      snmp_v3_priv_protocol: device.snmp_v3_priv_protocol ?? '',
+      ssh_username: device.ssh_username ?? '',
+      ssh_password: '',
+      ssh_port: device.ssh_port ?? 22,
+      ssh_key_path: device.ssh_key_path ?? '',
     })
     setEditError(null)
+    setShowCredsSection(false)
+    setShowSnmpV3(false)
     setIsEditOpen(true)
   }
 
@@ -65,11 +79,19 @@ const DeviceDetailPage: React.FC = () => {
         device_type: editForm.device_type as DeviceType,
         status: editForm.status as DeviceStatus,
         primary_ip: (editForm.primary_ip as string) || null,
-        management_ip: (editForm.management_ip as string) || null,
         cabinet_id: editForm.cabinet_id ? Number(editForm.cabinet_id) : null,
         vendor_id: editForm.vendor_id ? Number(editForm.vendor_id) : null,
         model: (editForm.model as string) || null,
         notes: (editForm.notes as string) || null,
+        snmp_community: (editForm.snmp_community as string) || null,
+        snmp_version: editForm.snmp_version ? Number(editForm.snmp_version) : 2,
+        snmp_v3_username: (editForm.snmp_v3_username as string) || null,
+        snmp_v3_auth_protocol: (editForm.snmp_v3_auth_protocol as string) || null,
+        snmp_v3_priv_protocol: (editForm.snmp_v3_priv_protocol as string) || null,
+        ssh_username: (editForm.ssh_username as string) || null,
+        ssh_password: (editForm.ssh_password as string) || null,
+        ssh_port: editForm.ssh_port ? Number(editForm.ssh_port) : undefined,
+        ssh_key_path: (editForm.ssh_key_path as string) || null,
       }},
       { onSuccess: () => setIsEditOpen(false), onError: () => setEditError('Errore durante il salvataggio') }
     )
@@ -327,6 +349,86 @@ const DeviceDetailPage: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
             <textarea value={editForm.notes as string ?? ''} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none" />
+          </div>
+
+          {/* Credenziali collapsible */}
+          <div className="border border-gray-200 rounded-lg overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowCredsSection(v => !v)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 bg-gray-50 text-sm font-medium text-gray-700 hover:bg-gray-100 text-left"
+            >
+              {showCredsSection ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              Credenziali SNMP / SSH
+              <span className="ml-auto text-xs text-gray-400 font-normal">usate per gli scan su questo dispositivo</span>
+            </button>
+            {showCredsSection && (
+              <div className="p-4 space-y-4 border-t border-gray-200">
+                {/* SNMP */}
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">SNMP</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Versione</label>
+                    <select value={editForm.snmp_version as number ?? 2} onChange={e => { setEditForm(p => ({ ...p, snmp_version: Number(e.target.value) })); setShowSnmpV3(Number(e.target.value) === 3) }} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                      <option value={1}>v1</option>
+                      <option value={2}>v2c</option>
+                      <option value={3}>v3</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Community string</label>
+                    <input type="text" value={editForm.snmp_community as string ?? ''} onChange={e => setEditForm(p => ({ ...p, snmp_community: e.target.value }))} placeholder="es. public" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                </div>
+                {(showSnmpV3 || (editForm.snmp_version as number) === 3) && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Username SNMPv3</label>
+                      <input type="text" value={editForm.snmp_v3_username as string ?? ''} onChange={e => setEditForm(p => ({ ...p, snmp_v3_username: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Auth protocol</label>
+                      <select value={editForm.snmp_v3_auth_protocol as string ?? ''} onChange={e => setEditForm(p => ({ ...p, snmp_v3_auth_protocol: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="">— Nessuno —</option>
+                        <option value="MD5">MD5</option>
+                        <option value="SHA">SHA</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Priv protocol</label>
+                      <select value={editForm.snmp_v3_priv_protocol as string ?? ''} onChange={e => setEditForm(p => ({ ...p, snmp_v3_priv_protocol: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="">— Nessuno —</option>
+                        <option value="DES">DES</option>
+                        <option value="AES">AES</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {/* SSH */}
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-2">SSH</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input type="text" value={editForm.ssh_username as string ?? ''} onChange={e => setEditForm(p => ({ ...p, ssh_username: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div className="relative">
+                      <input type={showSshPass ? 'text' : 'password'} value={editForm.ssh_password as string ?? ''} onChange={e => setEditForm(p => ({ ...p, ssh_password: e.target.value }))} autoComplete="new-password" placeholder="lascia vuoto per non modificare" className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                      <button type="button" onClick={() => setShowSshPass(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">{showSshPass ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Porta</label>
+                    <input type="number" min={1} max={65535} value={editForm.ssh_port as number ?? 22} onChange={e => setEditForm(p => ({ ...p, ssh_port: Number(e.target.value) }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Key path (opzionale)</label>
+                    <input type="text" value={editForm.ssh_key_path as string ?? ''} onChange={e => setEditForm(p => ({ ...p, ssh_key_path: e.target.value }))} placeholder="/home/user/.ssh/id_rsa" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </form>
       </Modal>

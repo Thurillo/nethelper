@@ -1,7 +1,7 @@
 import apiClient from './client'
 import type {
   Device, DeviceCreate, DeviceFilters, NetworkInterface, IpAddress,
-  MacEntry, ScanJob, PaginatedResponse
+  MacEntry, ScanJob, PaginatedResponse, DeviceBulkCreateRequest, DeviceBulkCreateResponse
 } from '../types'
 
 export const devicesApi = {
@@ -51,6 +51,11 @@ export const devicesApi = {
 
   startScan: async (deviceId: number, scanType: string): Promise<ScanJob> => {
     const response = await apiClient.post<ScanJob>(`/devices/${deviceId}/scan`, { scan_type: scanType })
+    return response.data
+  },
+
+  bulkCreate: async (data: DeviceBulkCreateRequest): Promise<DeviceBulkCreateResponse> => {
+    const response = await apiClient.post<DeviceBulkCreateResponse>('/devices/bulk', data)
     return response.data
   },
 }
