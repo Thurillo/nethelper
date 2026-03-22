@@ -137,7 +137,15 @@
       "Bash(ssh root@192.168.1.3 'cd /opt/nethelper && git pull && systemctl restart nethelper-backend && cd frontend && NODE_OPTIONS=\"\"--max-old-space-size=4096\"\" npm run build 2>&1 | tail -5')",
       "Bash(ssh root@192.168.1.3 'cd /opt/nethelper && git pull && source venv/bin/activate && cd backend && PYTHONPATH=/opt/nethelper/backend alembic revision --autogenerate -m \"\"add_mac_address_to_device\"\" 2>&1')",
       "Bash(ssh root@192.168.1.3 'source /opt/nethelper/venv/bin/activate && cd /opt/nethelper/backend && PYTHONPATH=/opt/nethelper/backend alembic upgrade head 2>&1')",
-      "Bash(scp root@192.168.1.3:/opt/nethelper/backend/alembic/versions/c61dca1aad09_add_mac_address_to_device.py /c/Claude/GDRHelper/backend/alembic/versions/)"
+      "Bash(scp root@192.168.1.3:/opt/nethelper/backend/alembic/versions/c61dca1aad09_add_mac_address_to_device.py /c/Claude/GDRHelper/backend/alembic/versions/)",
+      "Bash(ssh root@192.168.1.3 'cd /opt/nethelper && git checkout backend/alembic/versions/c61dca1aad09_add_mac_address_to_device.py && git pull && systemctl restart nethelper-backend && cd frontend && NODE_OPTIONS=\"\"--max-old-space-size=4096\"\" npm run build 2>&1 | tail -5')",
+      "Bash(ssh root@192.168.1.3 'cd /opt/nethelper && rm backend/alembic/versions/c61dca1aad09_add_mac_address_to_device.py && git pull && systemctl restart nethelper-backend && cd frontend && NODE_OPTIONS=\"\"--max-old-space-size=4096\"\" npm run build 2>&1 | tail -5')",
+      "Bash(ssh nethelper-server:*)",
+      "Read(//opt/nethelper/**)",
+      "Bash(npm run:*)",
+      "Bash(python -c \"from app.crud.cabinet import crud_cabinet; from app.schemas.cabinet import CabinetRead; from app.routers.cabinets import router; print\\(''OK''\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(npx vite:*)"
     ]
   }
 }

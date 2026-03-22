@@ -37,6 +37,19 @@ export const conflictsApi = {
     return response.data
   },
 
+  create: async (data: {
+    conflict_type: string
+    device_id?: number | null
+    entity_table?: string
+    field_name?: string
+    current_value?: unknown
+    discovered_value?: unknown
+    notes?: string
+  }): Promise<ScanConflict> => {
+    const response = await apiClient.post<ScanConflict>('/conflicts', data)
+    return response.data
+  },
+
   pendingCount: async (): Promise<{ count: number }> => {
     const response = await apiClient.get<{ count: number }>('/conflicts/pending-count')
     return response.data

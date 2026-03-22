@@ -93,7 +93,7 @@ const DeviceDetailPage: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs text-gray-500">Ultimo scan</p>
-                <p className="text-sm">{device.last_scan_at ? format(new Date(device.last_scan_at), 'dd/MM HH:mm', { locale: it }) : '—'}</p>
+                <p className="text-sm">{device.last_seen ? format(new Date(device.last_seen), 'dd/MM HH:mm', { locale: it }) : '—'}</p>
               </div>
               {device.mac_address && (
                 <div>

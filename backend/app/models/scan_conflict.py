@@ -32,6 +32,7 @@ class ConflictType(str, enum.Enum):
     suspected_unmanaged_switch = "suspected_unmanaged_switch"
     new_device_discovered = "new_device_discovered"
     changed_hostname = "changed_hostname"
+    duplicate_device = "duplicate_device"
     other = "other"
 
 

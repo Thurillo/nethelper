@@ -8,6 +8,18 @@ from pydantic import BaseModel
 from app.models.scan_conflict import ConflictStatus, ConflictType
 
 
+class ScanConflictCreate(BaseModel):
+    conflict_type: ConflictType
+    device_id: Optional[int] = None
+    scan_job_id: Optional[int] = None
+    entity_table: Optional[str] = None
+    entity_id: Optional[int] = None
+    field_name: Optional[str] = None
+    current_value: Optional[Any] = None
+    discovered_value: Optional[Any] = None
+    notes: Optional[str] = None
+
+
 class ScanConflictRead(BaseModel):
     id: int
     scan_job_id: Optional[int] = None

@@ -106,7 +106,7 @@ const DevicesPage: React.FC = () => {
     )},
     { key: 'cabinet', header: 'Armadio', render: (d) => <span className="text-gray-500 text-xs">{d.cabinet_name ?? '—'}</span> },
     { key: 'status', header: 'Stato', render: (d) => <DeviceStatusBadge status={d.status} /> },
-    { key: 'last_scan_at', header: 'Ultimo scan', render: (d) => <span className="text-gray-400 text-xs">{d.last_scan_at ? format(new Date(d.last_scan_at), 'dd/MM HH:mm', { locale: it }) : '—'}</span> },
+    { key: 'last_seen', header: 'Ultimo scan', render: (d) => <span className="text-gray-400 text-xs">{d.last_seen ? format(new Date(d.last_seen), 'dd/MM HH:mm', { locale: it }) : '—'}</span> },
   ]
 
   if (isAdmin()) {

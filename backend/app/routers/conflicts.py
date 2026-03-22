@@ -7,11 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.audit_log import log_action
 from app.crud.scan_conflict import crud_scan_conflict
+from app.models.scan_conflict import ScanConflict
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.schemas.scan_conflict import (
     ConflictBulkResolveRequest,
     ConflictResolveRequest,
+    ScanConflictCreate,
     ScanConflictRead,
 )
 from app.schemas.pagination import PaginatedResponse
@@ -48,6 +50,36 @@ async def list_conflicts(
     )
     _total = await crud_scan_conflict.count(db)
     return PaginatedResponse.build([ScanConflictRead.model_validate(c) for c in conflicts], total=_total, page=page, size=size)
+
+
+@router.post("/", response_model=ScanConflictRead, status_code=status.HTTP_201_CREATED)
+async def create_conflict(
+    body: ScanConflictCreate,
+    request: Request,
+    current_user: Annotated[object, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ScanConflictRead:
+    from app.models.scan_conflict import ConflictStatus
+    conflict = ScanConflict(
+        conflict_type=body.conflict_type,
+        device_id=body.device_id,
+        scan_job_id=body.scan_job_id,
+        entity_table=body.entity_table,
+        entity_id=body.entity_id,
+        field_name=body.field_name,
+        current_value=body.current_value,
+        discovered_value=body.discovered_value,
+        notes=body.notes,
+        status=ConflictStatus.pending,
+    )
+    db.add(conflict)
+    await db.flush()
+    await db.refresh(conflict)
+    client_ip = getattr(request.state, "client_ip", None)
+    await log_action(db, user_id=current_user.id, action="create_conflict",
+                     entity_table="scan_conflict", entity_id=conflict.id,
+                     client_ip=client_ip, description=f"Created conflict {conflict.conflict_type}.")
+    return ScanConflictRead.model_validate(conflict)
 
 
 @router.get("/{conflict_id}", response_model=ScanConflictRead)

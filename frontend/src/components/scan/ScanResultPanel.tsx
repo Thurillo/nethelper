@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { XCircle, Wifi, WifiOff, PlusCircle, X, Plus } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { XCircle, Wifi, WifiOff, PlusCircle, X, Plus, AlertTriangle } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useScanJobPolling, useCancelScan } from '../../hooks/useScanJobs'
 import { useCreateDevice, useDevices } from '../../hooks/useDevices'
 import { vendorsApi } from '../../api/vendors'
@@ -8,6 +8,7 @@ import { devicesApi } from '../../api/devices'
 import { interfacesApi } from '../../api/interfaces'
 import { cablesApi } from '../../api/cables'
 import { patchPanelsApi } from '../../api/patchPanels'
+import { conflictsApi } from '../../api/conflicts'
 import StatusDot from '../common/StatusDot'
 import QuickAddVendorModal from '../common/QuickAddVendorModal'
 import type { ScanJob, NetworkInterface, PatchPortDetail, Device } from '../../types'
@@ -87,12 +88,14 @@ const MatchBadge: React.FC<{ status: MatchStatus; deviceName?: string; ping: boo
 interface AddDeviceModalProps {
   host: FoundHost
   vendors: { id: number; name: string }[]
+  allDevices: Device[]
   onClose: () => void
   onSuccess: () => void
 }
 
-const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose, onSuccess }) => {
+const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, allDevices, onClose, onSuccess }) => {
   const createDevice = useCreateDevice()
+  const qc = useQueryClient()
   const [name, setName] = useState(host.hostname || host.ip)
   const [deviceType, setDeviceType] = useState('server')
   const [vendorId, setVendorId] = useState<number | ''>('')
@@ -101,6 +104,13 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [vendorModalOpen, setVendorModalOpen] = useState(false)
+
+  // Duplicate detection
+  const { status: dupStatus, deviceName: dupName } = getMatchStatus(host, allDevices)
+  const dupDevice = dupStatus !== 'unknown'
+    ? allDevices.find(d => d.primary_ip === host.ip || d.management_ip === host.ip ||
+        (host.mac && normMac(d.mac_address) === normMac(host.mac)))
+    : null
 
   // Port configuration
   const [portCount, setPortCount] = useState(1)
@@ -238,6 +248,30 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
     }
   }
 
+  const handleSaveAsConflict = async () => {
+    setError(null)
+    setIsSaving(true)
+    try {
+      await conflictsApi.create({
+        conflict_type: 'duplicate_device',
+        device_id: dupDevice?.id ?? null,
+        entity_table: 'device',
+        field_name: 'primary_ip',
+        current_value: { name: dupDevice?.name, ip: dupDevice?.primary_ip, mac: dupDevice?.mac_address },
+        discovered_value: { ip: host.ip, mac: host.mac, vendor: host.vendor, hostname: host.hostname },
+        notes: `Scansione IP: dispositivo duplicato rilevato — ${host.ip} già associato a "${dupDevice?.name ?? 'sconosciuto'}"`,
+      })
+      qc.invalidateQueries({ queryKey: ['conflicts'] })
+      onSuccess()
+      onClose()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Errore durante il salvataggio del conflitto'
+      setError(msg)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <>
     <QuickAddVendorModal
@@ -255,6 +289,32 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
         <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden">
           <div className="p-5 space-y-4 overflow-y-auto">
             {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
+
+            {/* Duplicate warning */}
+            {dupStatus === 'full' && (
+              <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2.5">
+                <AlertTriangle size={15} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-amber-800">
+                    Dispositivo già registrato: <span className="font-semibold">"{dupName}"</span>
+                  </p>
+                  <p className="text-xs text-amber-600 mt-0.5">
+                    IP e MAC coincidono con un dispositivo esistente. Puoi salvare questa segnalazione nei conflitti invece di creare un duplicato.
+                  </p>
+                </div>
+              </div>
+            )}
+            {dupStatus === 'conflict' && (
+              <div className="flex items-start gap-2.5 bg-orange-50 border border-orange-300 rounded-lg px-3 py-2.5">
+                <AlertTriangle size={15} className="text-orange-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-orange-800">Possibile duplicato</p>
+                  <p className="text-xs text-orange-600 mt-0.5">
+                    IP o MAC già associati a un altro dispositivo. Verifica prima di procedere.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Pre-filled discovery info */}
             <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1 text-gray-600 font-mono">
@@ -492,14 +552,24 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
           </div>
 
           {/* Footer */}
-          <div className="flex gap-3 px-5 py-4 border-t border-gray-200 flex-shrink-0">
+          <div className="flex gap-2 px-5 py-4 border-t border-gray-200 flex-shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
             >
               Annulla
             </button>
+            {dupStatus !== 'unknown' && (
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={handleSaveAsConflict}
+                className="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 disabled:opacity-50 font-medium"
+              >
+                {isSaving ? 'Salvataggio...' : 'Salva nei conflitti'}
+              </button>
+            )}
             <button
               type="submit"
               disabled={isSaving}
@@ -701,6 +771,7 @@ const ScanResultPanel: React.FC<ScanResultPanelProps> = ({ job: initialJob }) =>
         <AddDeviceModal
           host={addHost}
           vendors={vendors}
+          allDevices={allDevices}
           onClose={() => setAddHost(null)}
           onSuccess={() => setAddedIps(prev => new Set([...prev, addHost.ip]))}
         />

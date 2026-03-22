@@ -181,7 +181,7 @@ export interface Device {
   ssh_username: string | null
   ssh_port: number
   notes: string | null
-  last_scan_at: string | null
+  last_seen: string | null
   interfaces_count?: number
   created_at: string
   updated_at: string

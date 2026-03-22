@@ -119,8 +119,11 @@ class CRUDDevice(CRUDBase[Device, DeviceCreate, DeviceUpdate]):
         return data
 
     async def create(self, db: AsyncSession, obj_in: DeviceCreate) -> Device:
+        from datetime import datetime, timezone
         data = obj_in.model_dump()
         data = self._encrypt_sensitive_fields(data)
+        if data.get('last_seen') is None:
+            data['last_seen'] = datetime.now(timezone.utc)
         db_obj = Device(**data)
         db.add(db_obj)
         await db.flush()
