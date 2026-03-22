@@ -167,6 +167,7 @@ export interface Device {
   cabinet_id: number | null
   cabinet?: Cabinet
   cabinet_name?: string | null
+  vendor_name?: string | null
   u_position: number | null
   u_height: number
   vendor_id: number | null

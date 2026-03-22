@@ -114,6 +114,7 @@ class DeviceRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     cabinet_name: Optional[str] = None
+    vendor_name: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -128,6 +129,13 @@ class DeviceRead(BaseModel):
             cabinet = getattr(obj, "cabinet", None)
             if cabinet is not None:
                 instance.cabinet_name = cabinet.name
+        except Exception:
+            pass
+        # Populate vendor_name from the loaded relationship if present
+        try:
+            vendor = getattr(obj, "vendor", None)
+            if vendor is not None:
+                instance.vendor_name = vendor.name
         except Exception:
             pass
         return instance

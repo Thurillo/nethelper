@@ -93,7 +93,7 @@ class CRUDDevice(CRUDBase[Device, DeviceCreate, DeviceUpdate]):
         not_connected_to_pp: bool = False,
     ) -> list[Device]:
         stmt = self._build_filter_stmt(
-            select(Device).options(selectinload(Device.cabinet)),
+            select(Device).options(selectinload(Device.cabinet), selectinload(Device.vendor)),
             site_id=site_id,
             cabinet_id=cabinet_id,
             device_type=device_type,

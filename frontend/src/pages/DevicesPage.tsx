@@ -132,7 +132,7 @@ const DevicesPage: React.FC = () => {
     )},
     { key: 'cabinet', header: 'Armadio', render: (d) => <span className="text-gray-500 text-xs">{d.cabinet_name ?? '—'}</span> },
     { key: 'status', header: 'Stato', render: (d) => <DeviceStatusBadge status={d.status} /> },
-    { key: 'vendor', header: 'Vendor', render: (d) => <span className="text-gray-500 text-xs">{d.vendor?.name ?? '—'}</span> },
+    { key: 'vendor', header: 'Vendor', render: (d) => <span className="text-gray-500 text-xs">{d.vendor_name ?? '—'}</span> },
     { key: 'model', header: 'Modello', render: (d) => <span className="text-gray-600 text-xs">{d.model ?? '—'}</span> },
     { key: 'notes', header: 'Note', render: (d) => (
       d.notes
