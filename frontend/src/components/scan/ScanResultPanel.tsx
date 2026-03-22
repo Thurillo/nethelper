@@ -224,54 +224,50 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
               />
             </div>
 
-            {/* Type + Vendor in a grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
-                <select
-                  value={deviceType}
-                  onChange={e => setDeviceType(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="server">Server</option>
-                  <option value="switch">Switch</option>
-                  <option value="router">Router</option>
-                  <option value="firewall">Firewall</option>
-                  <option value="ap">Access Point</option>
-                  <option value="printer">Stampante</option>
-                  <option value="workstation">Workstation</option>
-                  <option value="phone">Telefono</option>
-                  <option value="camera">Telecamera</option>
-                  <option value="other">Altro</option>
-                </select>
-              </div>
+            {/* Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+              <select
+                value={deviceType}
+                onChange={e => setDeviceType(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="server">Server</option>
+                <option value="switch">Switch</option>
+                <option value="router">Router</option>
+                <option value="firewall">Firewall</option>
+                <option value="ap">Access Point</option>
+                <option value="printer">Stampante</option>
+                <option value="workstation">Workstation</option>
+                <option value="phone">Telefono</option>
+                <option value="camera">Telecamera</option>
+                <option value="other">Altro</option>
+              </select>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Vendor
-                  {host.vendor && <span className="ml-1 text-xs font-normal text-gray-400">(da MAC: {host.vendor})</span>}
-                </label>
-                <div className="flex gap-1.5">
-                  <select
-                    value={vendorId}
-                    onChange={e => setVendorId(e.target.value === '' ? '' : Number(e.target.value))}
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">— Nessuno —</option>
-                    {vendors.map(v => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => setVendorModalOpen(true)}
-                    title="Aggiungi nuovo vendor"
-                    className="px-2.5 py-2 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-primary-600 hover:border-primary-400 transition-colors"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
+            {/* Vendor */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Vendor
+                {host.vendor && <span className="ml-1 text-xs font-normal text-gray-400">(da MAC: {host.vendor})</span>}
+              </label>
+              <select
+                value={vendorId}
+                onChange={e => setVendorId(e.target.value === '' ? '' : Number(e.target.value))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">— Nessuno —</option>
+                {vendors.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setVendorModalOpen(true)}
+                className="mt-1.5 flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800 transition-colors"
+              >
+                <Plus size={11} /> Aggiungi nuovo vendor
+              </button>
             </div>
 
             {/* Model */}
