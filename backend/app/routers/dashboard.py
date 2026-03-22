@@ -39,7 +39,11 @@ async def _group_by(db: AsyncSession, model, column) -> dict[str, int]:
     result = await db.execute(
         select(column, func.count(model.id)).group_by(column)
     )
-    return {str(row[0]): row[1] for row in result.all()}
+    out = {}
+    for row in result.all():
+        key = row[0].value if hasattr(row[0], 'value') else str(row[0])
+        out[key] = row[1]
+    return out
 
 
 @router.get("/stats", response_model=DashboardStats)
