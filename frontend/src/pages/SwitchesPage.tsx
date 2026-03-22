@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Edit2, Link, Network, ArrowUpDown, Plus, Server
 import { devicesApi } from '../api/devices'
 import { interfacesApi } from '../api/interfaces'
 import { switchesApi, type SwitchPortUpdateBody } from '../api/switches'
+import { vlansApi } from '../api/vlans'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import EmptyState from '../components/common/EmptyState'
 import QuickAddVendorModal from '../components/common/QuickAddVendorModal'
@@ -81,6 +82,13 @@ const SwitchPortEditModal: React.FC<{
       const res = await interfacesApi.list({ size: 500 })
       return res.items
     },
+    enabled: isOpen,
+    staleTime: 60_000,
+  })
+
+  const { data: vlans } = useQuery({
+    queryKey: ['vlans-all'],
+    queryFn: () => vlansApi.list({ size: 500 }),
     enabled: isOpen,
     staleTime: 60_000,
   })
@@ -189,15 +197,19 @@ const SwitchPortEditModal: React.FC<{
           {/* VLAN + Speed */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">VLAN ID</label>
-              <input
-                type="number"
+              <label className="block text-xs font-medium text-gray-700 mb-1">VLAN</label>
+              <select
                 value={vlanId}
                 onChange={e => setVlanId(e.target.value)}
-                min={1} max={4094}
-                placeholder="—"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
-              />
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none bg-white"
+              >
+                <option value="">— nessuna —</option>
+                {(vlans?.items ?? []).map(v => (
+                  <option key={v.id} value={v.id}>
+                    {v.vid} — {v.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Velocità (Mbps)</label>
