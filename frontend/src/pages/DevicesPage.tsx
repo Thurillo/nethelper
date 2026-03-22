@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Plus, Columns3 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { devicesApi } from '../api/devices'
 import { sitesApi } from '../api/sites'
@@ -50,6 +50,22 @@ const DevicesPage: React.FC = () => {
   const [form, setForm] = useState<DeviceCreate>(defaultForm)
   const [error, setError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Device | null>(null)
+  const [colMenuOpen, setColMenuOpen] = useState(false)
+  const colMenuRef = useRef<HTMLDivElement>(null)
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(
+    new Set(['name', 'device_type', 'primary_ip', 'mac_address', 'cabinet', 'status', 'vendor', 'model', 'notes', 'last_seen'])
+  )
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (colMenuRef.current && !colMenuRef.current.contains(e.target as Node)) setColMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const toggleCol = (key: string) =>
+    setVisibleCols(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s })
 
   const { data, isLoading } = useDevices({ ...filters, search: search || undefined, page, size: 20, exclude_device_type: 'patch_panel' })
   const { data: sitesData } = useQuery({ queryKey: ['sites', 'all'], queryFn: () => sitesApi.list({ size: 100 }), staleTime: 60_000 })
@@ -95,22 +111,41 @@ const DevicesPage: React.FC = () => {
     else createDevice.mutate(form)
   }
 
-  const columns: Column<Device>[] = [
-    { key: 'name', header: 'Nome', sortable: true, render: (d) => <span className="font-medium text-gray-900">{d.name}</span> },
+  const allColumns: Column<Device>[] = [
+    { key: 'name', header: 'Nome', sortable: true, render: (d) => {
+      const nameIsIp = d.name === d.primary_ip
+      const label = nameIsIp && d.notes ? d.notes : d.name
+      const sub = nameIsIp && d.notes ? d.name : null
+      return (
+        <div>
+          <span className={`font-medium ${nameIsIp && !d.notes ? 'text-gray-400 font-mono text-xs' : 'text-gray-900'}`}>{label}</span>
+          {sub && <div className="text-xs text-gray-400 font-mono leading-tight">{sub}</div>}
+        </div>
+      )
+    }},
     { key: 'device_type', header: 'Tipo', render: (d) => <DeviceTypeBadge type={d.device_type} /> },
     { key: 'primary_ip', header: 'IP', render: (d) => <span className="text-gray-600 font-mono text-xs">{d.primary_ip ?? '—'}</span> },
     { key: 'mac_address', header: 'MAC', render: (d) => (
       d.mac_address
-        ? <span className="text-gray-500 font-mono text-xs" title={`Cisco: ${d.mac_address_cisco ?? '—'}`}>{d.mac_address}</span>
+        ? <span className="text-gray-500 font-mono text-xs">{d.mac_address}</span>
         : <span className="text-gray-300 text-xs">—</span>
     )},
     { key: 'cabinet', header: 'Armadio', render: (d) => <span className="text-gray-500 text-xs">{d.cabinet_name ?? '—'}</span> },
     { key: 'status', header: 'Stato', render: (d) => <DeviceStatusBadge status={d.status} /> },
+    { key: 'vendor', header: 'Vendor', render: (d) => <span className="text-gray-500 text-xs">{d.vendor?.name ?? '—'}</span> },
+    { key: 'model', header: 'Modello', render: (d) => <span className="text-gray-600 text-xs">{d.model ?? '—'}</span> },
+    { key: 'notes', header: 'Note', render: (d) => (
+      d.notes
+        ? <span className="text-gray-600 text-xs max-w-xs truncate block" title={d.notes}>{d.notes}</span>
+        : <span className="text-gray-300 text-xs">—</span>
+    )},
     { key: 'last_seen', header: 'Ultimo scan', render: (d) => <span className="text-gray-400 text-xs">{d.last_seen ? format(new Date(d.last_seen), 'dd/MM HH:mm', { locale: it }) : '—'}</span> },
   ]
 
+  const columns: Column<Device>[] = allColumns.filter(c => c.key === 'actions' || visibleCols.has(c.key as string))
+
   if (isAdmin()) {
-    columns.push({ key: 'actions', header: '', render: (d) => (
+    allColumns.push({ key: 'actions', header: '', render: (d) => (
       <div className="flex gap-2">
         <button onClick={(e) => { e.stopPropagation(); openEdit(d) }} className="text-xs text-primary-600 hover:underline">Modifica</button>
         <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(d) }} className="text-xs text-red-500 hover:underline">Elimina</button>
@@ -163,6 +198,42 @@ const DevicesPage: React.FC = () => {
           <option value="">Tutte le sedi</option>
           {sitesData?.items.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+
+        {/* Column visibility toggle */}
+        <div className="relative ml-auto" ref={colMenuRef}>
+          <button
+            onClick={() => setColMenuOpen(p => !p)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
+          >
+            <Columns3 size={14} />
+            Colonne
+          </button>
+          {colMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 z-30 bg-white border border-gray-200 rounded-xl shadow-lg p-3 min-w-[160px]">
+              {[
+                { key: 'name', label: 'Nome' },
+                { key: 'primary_ip', label: 'IP' },
+                { key: 'mac_address', label: 'MAC' },
+                { key: 'cabinet', label: 'Armadio' },
+                { key: 'status', label: 'Stato' },
+                { key: 'vendor', label: 'Vendor' },
+                { key: 'model', label: 'Modello' },
+                { key: 'notes', label: 'Note' },
+                { key: 'last_seen', label: 'Ultimo scan' },
+              ].map(col => (
+                <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer text-sm text-gray-700 hover:text-gray-900">
+                  <input
+                    type="checkbox"
+                    checked={visibleCols.has(col.key)}
+                    onChange={() => toggleCol(col.key)}
+                    className="rounded text-primary-600"
+                  />
+                  {col.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {isLoading ? <LoadingSpinner centered /> : (
