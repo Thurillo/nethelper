@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { XCircle, Wifi, WifiOff, PlusCircle, X } from 'lucide-react'
+import { XCircle, Wifi, WifiOff, PlusCircle, X, Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useScanJobPolling, useCancelScan } from '../../hooks/useScanJobs'
 import { useCreateDevice, useDevices } from '../../hooks/useDevices'
@@ -9,7 +9,8 @@ import { interfacesApi } from '../../api/interfaces'
 import { cablesApi } from '../../api/cables'
 import { patchPanelsApi } from '../../api/patchPanels'
 import StatusDot from '../common/StatusDot'
-import type { ScanJob, NetworkInterface, PatchPortDetail } from '../../types'
+import QuickAddVendorModal from '../common/QuickAddVendorModal'
+import type { ScanJob, NetworkInterface, PatchPortDetail, Device } from '../../types'
 
 interface FoundHost {
   ip: string
@@ -21,6 +22,67 @@ interface FoundHost {
 }
 
 type ConnectionType = 'none' | 'switch' | 'patch_panel'
+type MatchStatus = 'full' | 'conflict' | 'unknown'
+
+function normMac(mac: string | null): string | null {
+  if (!mac) return null
+  return mac.toLowerCase().replace(/[:\-]/g, '')
+}
+
+function getMatchStatus(
+  host: FoundHost,
+  devices: Device[]
+): { status: MatchStatus; deviceName?: string } {
+  const hostMac = normMac(host.mac)
+  const ipMatches = devices.filter(
+    d => d.primary_ip === host.ip || d.management_ip === host.ip
+  )
+  const macMatches = hostMac
+    ? devices.filter(d => normMac(d.mac_address) === hostMac)
+    : []
+
+  if (ipMatches.length === 0 && macMatches.length === 0) return { status: 'unknown' }
+
+  const ipIds = new Set(ipMatches.map(d => d.id))
+  for (const d of macMatches) {
+    if (ipIds.has(d.id)) return { status: 'full', deviceName: d.name }
+  }
+  return { status: 'conflict' }
+}
+
+const MatchBadge: React.FC<{ status: MatchStatus; deviceName?: string; ping: boolean }> = ({
+  status,
+  deviceName,
+  ping,
+}) => {
+  const title =
+    status === 'full'
+      ? `IP e MAC coincidono con "${deviceName}"`
+      : status === 'conflict'
+      ? 'IP o MAC trovati su dispositivi diversi — possibile conflitto'
+      : 'Non ancora registrato'
+
+  return (
+    <div className="flex flex-col items-center gap-0.5" title={title}>
+      {status === 'full' && (
+        <div className="w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
+          <span className="text-white text-[10px] font-bold">✓</span>
+        </div>
+      )}
+      {status === 'conflict' && (
+        <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+          <span className="text-white text-[10px] font-bold">✗</span>
+        </div>
+      )}
+      {status === 'unknown' && (
+        <div className="w-4 h-4 rounded-sm bg-yellow-400" />
+      )}
+      {ping
+        ? <Wifi size={9} className="text-green-400" />
+        : <WifiOff size={9} className="text-gray-600" />}
+    </div>
+  )
+}
 
 interface AddDeviceModalProps {
   host: FoundHost
@@ -38,6 +100,7 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [vendorModalOpen, setVendorModalOpen] = useState(false)
 
   // Connection section
   const [connectionType, setConnectionType] = useState<ConnectionType>('none')
@@ -123,7 +186,12 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <>
+    <QuickAddVendorModal
+      isOpen={vendorModalOpen}
+      onClose={() => setVendorModalOpen(false)}
+    />
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 flex-shrink-0">
@@ -183,16 +251,26 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
                   Vendor
                   {host.vendor && <span className="ml-1 text-xs font-normal text-gray-400">(da MAC: {host.vendor})</span>}
                 </label>
-                <select
-                  value={vendorId}
-                  onChange={e => setVendorId(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="">— Nessuno —</option>
-                  {vendors.map(v => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
+                <div className="flex gap-1.5">
+                  <select
+                    value={vendorId}
+                    onChange={e => setVendorId(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  >
+                    <option value="">— Nessuno —</option>
+                    {vendors.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setVendorModalOpen(true)}
+                    title="Aggiungi nuovo vendor"
+                    className="px-2.5 py-2 border border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-primary-600 hover:border-primary-400 transition-colors"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -339,6 +417,7 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
         </form>
       </div>
     </div>
+    </>
   )
 }
 
@@ -362,6 +441,14 @@ const ScanResultPanel: React.FC<ScanResultPanelProps> = ({ job: initialJob }) =>
     staleTime: 60_000,
   })
   const vendors = vendorsData?.items ?? []
+
+  const { data: allDevicesData } = useQuery({
+    queryKey: ['devices', 'all-for-scan'],
+    queryFn: () => devicesApi.list({ size: 500 }),
+    staleTime: 60_000,
+    enabled: isIpRange,
+  })
+  const allDevices: Device[] = allDevicesData?.items ?? []
 
   const summary = job.result_summary as Record<string, unknown> | null
   const foundHosts: FoundHost[] = (summary?.found_hosts as FoundHost[]) ?? []
@@ -457,9 +544,10 @@ const ScanResultPanel: React.FC<ScanResultPanelProps> = ({ job: initialJob }) =>
                           )}
                         </td>
                         <td className="px-3 py-2 text-center">
-                          {h.ping
-                            ? <Wifi size={12} className="text-green-400 inline" />
-                            : <WifiOff size={12} className="text-gray-600 inline" />}
+                          {(() => {
+                            const { status, deviceName } = getMatchStatus(h, allDevices)
+                            return <MatchBadge status={status} deviceName={deviceName} ping={h.ping} />
+                          })()}
                         </td>
                         <td className="px-3 py-2">
                           <button
