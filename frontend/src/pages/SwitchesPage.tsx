@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronUp, Edit2, Link, Network, ArrowUpDown } from 'lucide-react'
+import { ChevronDown, ChevronUp, Edit2, Link, Network, ArrowUpDown, Plus } from 'lucide-react'
 import { devicesApi } from '../api/devices'
 import { interfacesApi } from '../api/interfaces'
 import { switchesApi, type SwitchPortUpdateBody } from '../api/switches'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import EmptyState from '../components/common/EmptyState'
 import Pagination from '../components/common/Pagination'
+import QuickAddVendorModal from '../components/common/QuickAddVendorModal'
 import type { Device, SwitchPortDetail, NetworkInterface } from '../types'
 
 // ─── Port dot ────────────────────────────────────────────────────────────────
@@ -516,6 +517,8 @@ const SwitchCard: React.FC<{ sw: Device }> = ({ sw }) => {
 
 const SwitchesPage: React.FC = () => {
   const [page, setPage] = useState(1)
+  const [vendorModalOpen, setVendorModalOpen] = useState(false)
+  const [vendorAdded, setVendorAdded] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['switches', page],
@@ -525,12 +528,34 @@ const SwitchesPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Switch</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          {data ? `${data.total} switch` : 'Gestisci le porte degli switch'}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Switch</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {data ? `${data.total} switch` : 'Gestisci le porte degli switch'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {vendorAdded && (
+            <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2.5 py-1.5 rounded-lg">
+              ✓ Vendor "{vendorAdded}" aggiunto
+            </span>
+          )}
+          <button
+            onClick={() => { setVendorAdded(null); setVendorModalOpen(true) }}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+          >
+            <Plus size={14} />
+            Aggiungi vendor
+          </button>
+        </div>
       </div>
+
+      <QuickAddVendorModal
+        isOpen={vendorModalOpen}
+        onClose={() => setVendorModalOpen(false)}
+        onCreated={(name) => setVendorAdded(name)}
+      />
 
       {isLoading ? (
         <LoadingSpinner centered />
