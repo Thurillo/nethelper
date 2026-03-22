@@ -1,22 +1,27 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Search, ArrowRight, Minus, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, ArrowRight, Minus, ChevronLeft, ChevronRight, Plus, Edit2 } from 'lucide-react'
 import { connectionsApi, type ConnectionPath } from '../api/connections'
 import { devicesApi } from '../api/devices'
 import { sitesApi } from '../api/sites'
 import { cabinetsApi } from '../api/cabinets'
 import LoadingSpinner from '../components/common/LoadingSpinner'
+import AddConnectionModal from '../components/connections/AddConnectionModal'
+import { useAuthStore } from '../store/authStore'
 
 const PAGE_SIZE = 50
 
 const ConnectionsPage: React.FC = () => {
+  const { isAdmin } = useAuthStore()
   const [q, setQ] = useState('')
   const [switchId, setSwitchId] = useState<number | undefined>()
   const [siteId, setSiteId] = useState<number | undefined>()
   const [cabinetId, setCabinetId] = useState<number | undefined>()
   const [onlyDirect, setOnlyDirect] = useState(false)
   const [page, setPage] = useState(1)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingConn, setEditingConn] = useState<ConnectionPath | null>(null)
 
   const { data, isLoading } = useQuery({
     queryKey: ['connections', { q, switchId, siteId, cabinetId, onlyDirect, page }],
@@ -66,9 +71,18 @@ const ConnectionsPage: React.FC = () => {
             Percorsi di rete: Dispositivo → Patch Panel → Switch
           </p>
         </div>
-        {total > 0 && (
-          <span className="text-sm text-gray-500">{total} percorsi</span>
-        )}
+        <div className="flex items-center gap-3">
+          {total > 0 && <span className="text-sm text-gray-500">{total} percorsi</span>}
+          {isAdmin() && (
+            <button
+              onClick={() => { setEditingConn(null); setModalOpen(true) }}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700"
+            >
+              <Plus size={15} />
+              Nuova connessione
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -166,17 +180,25 @@ const ConnectionsPage: React.FC = () => {
                   <th className="px-4 py-3 text-left font-medium text-gray-500 text-xs uppercase tracking-wide">
                     Porta Switch
                   </th>
+                  <th className="px-4 py-3 w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {paths.map((path: ConnectionPath, idx: number) => (
-                  <ConnectionRow key={idx} path={path} />
+                  <ConnectionRow key={idx} path={path} onEdit={isAdmin() ? () => { setEditingConn(path); setModalOpen(true) } : undefined} />
                 ))}
               </tbody>
             </table>
           </div>
         )}
       </div>
+
+      {/* Add/Edit modal */}
+      <AddConnectionModal
+        isOpen={modalOpen}
+        onClose={() => { setModalOpen(false); setEditingConn(null) }}
+        editing={editingConn}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (
@@ -210,7 +232,7 @@ const ConnectionsPage: React.FC = () => {
 // Row component
 // ---------------------------------------------------------------------------
 
-const ConnectionRow: React.FC<{ path: ConnectionPath }> = ({ path }) => {
+const ConnectionRow: React.FC<{ path: ConnectionPath; onEdit?: () => void }> = ({ path, onEdit }) => {
   return (
     <tr className="hover:bg-gray-50/50 transition-colors">
       {/* Device A */}
@@ -277,6 +299,15 @@ const ConnectionRow: React.FC<{ path: ConnectionPath }> = ({ path }) => {
         <span className="font-mono text-xs text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
           {path.iface_c_name ?? '—'}
         </span>
+      </td>
+
+      {/* Edit */}
+      <td className="px-2 py-3 text-right">
+        {onEdit && (
+          <button onClick={onEdit} className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Modifica">
+            <Edit2 size={13} />
+          </button>
+        )}
       </td>
     </tr>
   )
