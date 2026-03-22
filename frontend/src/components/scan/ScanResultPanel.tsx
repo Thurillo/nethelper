@@ -102,6 +102,18 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
   const [isSaving, setIsSaving] = useState(false)
   const [vendorModalOpen, setVendorModalOpen] = useState(false)
 
+  // Port configuration
+  const [portCount, setPortCount] = useState(1)
+  const [hasPassthrough, setHasPassthrough] = useState(false)
+
+  const handleDeviceTypeChange = (val: string) => {
+    setDeviceType(val)
+    setHasPassthrough(false)
+    if (val === 'switch') setPortCount(24)
+    else if (val === 'router') setPortCount(4)
+    else setPortCount(1)
+  }
+
   // Connection section
   const [connectionType, setConnectionType] = useState<ConnectionType>('none')
   const [selectedSwitchId, setSelectedSwitchId] = useState<number | ''>('')
@@ -155,24 +167,65 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
         notes: notes || null,
       })
 
-      // 2. If a connection is requested, create a default interface then the link
-      if (connectionType !== 'none' && (selectedSwitchPortId || selectedPPPortId)) {
-        const newIface = await interfacesApi.create({
+      // 2. Create port interfaces based on device type
+      let firstIfaceId: number | null = null
+
+      if (deviceType === 'switch' || deviceType === 'router') {
+        // Create N ethernet ports
+        for (let i = 1; i <= portCount; i++) {
+          const iface = await interfacesApi.create({
+            device_id: device.id,
+            name: `Port ${i}`,
+            interface_type: 'ethernet',
+            mac_address: i === 1 ? (host.mac || null) : null,
+          })
+          if (i === 1) firstIfaceId = iface.id
+        }
+      } else if (deviceType === 'phone' && hasPassthrough) {
+        // Main line + pass-through ethernet
+        const iface = await interfacesApi.create({
           device_id: device.id,
           name: 'eth0',
           interface_type: 'ethernet',
           mac_address: host.mac || null,
         })
+        firstIfaceId = iface.id
+        await interfacesApi.create({
+          device_id: device.id,
+          name: 'eth1-passthrough',
+          interface_type: 'ethernet',
+        })
+      }
+
+      // 3. If a connection is requested, use firstIfaceId or create eth0
+      if (connectionType !== 'none' && (selectedSwitchPortId || selectedPPPortId)) {
+        if (!firstIfaceId) {
+          const iface = await interfacesApi.create({
+            device_id: device.id,
+            name: 'eth0',
+            interface_type: 'ethernet',
+            mac_address: host.mac || null,
+          })
+          firstIfaceId = iface.id
+        }
 
         if (connectionType === 'switch' && selectedSwitchPortId) {
-          const a = Math.min(newIface.id, Number(selectedSwitchPortId))
-          const b = Math.max(newIface.id, Number(selectedSwitchPortId))
+          const a = Math.min(firstIfaceId, Number(selectedSwitchPortId))
+          const b = Math.max(firstIfaceId, Number(selectedSwitchPortId))
           await cablesApi.create({ interface_a_id: a, interface_b_id: b, cable_type: 'copper' })
         }
 
         if (connectionType === 'patch_panel' && selectedPPPortId && selectedPPId) {
-          await patchPanelsApi.linkPort(Number(selectedPPId), Number(selectedPPPortId), newIface.id)
+          await patchPanelsApi.linkPort(Number(selectedPPId), Number(selectedPPPortId), firstIfaceId)
         }
+      } else if (!firstIfaceId) {
+        // Default: always create at least 1 ethernet interface
+        await interfacesApi.create({
+          device_id: device.id,
+          name: 'eth0',
+          interface_type: 'ethernet',
+          mac_address: host.mac || null,
+        })
       }
 
       onSuccess()
@@ -229,7 +282,7 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
               <select
                 value={deviceType}
-                onChange={e => setDeviceType(e.target.value)}
+                onChange={e => handleDeviceTypeChange(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="server">Server</option>
@@ -244,6 +297,51 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, onClose,
                 <option value="other">Altro</option>
               </select>
             </div>
+
+            {/* Port configuration — switch / router / phone */}
+            {(deviceType === 'switch' || deviceType === 'router') && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-3">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Numero porte ethernet
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={512}
+                    value={portCount}
+                    onChange={e => setPortCount(Math.max(1, Math.min(512, Number(e.target.value))))}
+                    className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono text-center focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <span className="text-xs text-gray-500">
+                    Verranno create <strong>{portCount}</strong> interfacce
+                    {' '}(Port 1 … Port {portCount})
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {deviceType === 'phone' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hasPassthrough}
+                    onChange={e => setHasPassthrough(e.target.checked)}
+                    className="w-4 h-4 rounded text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Ha porta di rilancio ethernet
+                    <span className="ml-1 text-xs text-gray-400">(pass-through desktop → PC)</span>
+                  </span>
+                </label>
+                {hasPassthrough && (
+                  <p className="mt-1.5 text-xs text-gray-500 ml-6">
+                    Verranno create 2 interfacce: <code className="font-mono">eth0</code> + <code className="font-mono">eth1-passthrough</code>
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Vendor */}
             <div>
