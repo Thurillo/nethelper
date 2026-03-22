@@ -175,6 +175,68 @@ const DashboardPage: React.FC = () => {
         />
       </div>
 
+      {/* Charts row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Devices by type */}
+        <div className="card p-5">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">Dispositivi per tipo</h2>
+          <div className="space-y-2.5">
+            {Object.entries(stats.devices_by_type)
+              .sort((a, b) => b[1] - a[1])
+              .map(([type, count]) => {
+                const pct = stats.devices_total > 0 ? Math.round((count / stats.devices_total) * 100) : 0
+                const label: Record<string, string> = {
+                  switch: 'Switch', router: 'Router', ap: 'Access Point', server: 'Server',
+                  firewall: 'Firewall', ups: 'UPS', patch_panel: 'Patch Panel',
+                  workstation: 'Workstation', printer: 'Stampante', camera: 'Camera',
+                  phone: 'Telefono', other: 'Altro',
+                }
+                return (
+                  <div key={type}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-600">{label[type] ?? type}</span>
+                      <span className="font-medium text-gray-800">{count} <span className="text-gray-400 font-normal">({pct}%)</span></span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+        </div>
+
+        {/* Devices by status */}
+        <div className="card p-5">
+          <h2 className="text-sm font-semibold text-gray-700 mb-4">Dispositivi per stato</h2>
+          <div className="space-y-2.5">
+            {Object.entries(stats.devices_by_status)
+              .sort((a, b) => b[1] - a[1])
+              .map(([status, count]) => {
+                const pct = stats.devices_total > 0 ? Math.round((count / stats.devices_total) * 100) : 0
+                const label: Record<string, string> = {
+                  active: 'Attivo', inactive: 'Inattivo', planned: 'Pianificato', decommissioned: 'Dismesso',
+                }
+                const color: Record<string, string> = {
+                  active: 'bg-green-500', inactive: 'bg-gray-400',
+                  planned: 'bg-blue-400', decommissioned: 'bg-red-400',
+                }
+                return (
+                  <div key={status}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-600">{label[status] ?? status}</span>
+                      <span className="font-medium text-gray-800">{count} <span className="text-gray-400 font-normal">({pct}%)</span></span>
+                    </div>
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${color[status] ?? 'bg-gray-500'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+        </div>
+      </div>
+
       {/* Recent scans */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">

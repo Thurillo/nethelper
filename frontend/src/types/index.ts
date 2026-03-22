@@ -555,6 +555,8 @@ export interface DashboardStats {
   pending_conflicts: number
   suspected_unmanaged_switches: number
   recent_scans: ScanJob[]
+  devices_by_type: Record<string, number>
+  devices_by_status: Record<string, number>
 }
 
 // ============================================================

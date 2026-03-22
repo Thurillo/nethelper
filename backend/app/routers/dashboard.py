@@ -35,23 +35,32 @@ async def _count_where(db: AsyncSession, model, *conditions) -> int:
     return result.scalar() or 0
 
 
+async def _group_by(db: AsyncSession, model, column) -> dict[str, int]:
+    result = await db.execute(
+        select(column, func.count(model.id)).group_by(column)
+    )
+    return {str(row[0]): row[1] for row in result.all()}
+
+
 @router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DashboardStats:
     (
-        total_devices,
-        active_devices,
-        total_sites,
-        total_cabinets,
-        total_interfaces,
-        total_cables,
-        total_vlans,
-        total_prefixes,
-        total_ip_addresses,
+        devices_total,
+        devices_active,
+        sites_count,
+        cabinets_count,
+        interfaces_count,
+        cables_count,
+        vlans_count,
+        prefixes_count,
+        ip_addresses_count,
         pending_conflicts,
-        unmanaged_suspected,
+        suspected_unmanaged_switches,
+        devices_by_type,
+        devices_by_status,
     ) = await asyncio.gather(
         _count(db, Device),
         _count_where(db, Device, Device.status == DeviceStatus.active),
@@ -64,22 +73,26 @@ async def get_dashboard_stats(
         _count(db, IpAddress),
         crud_scan_conflict.get_pending_count(db),
         _count_where(db, Device, Device.is_unmanaged_suspected == True),
+        _group_by(db, Device, Device.device_type),
+        _group_by(db, Device, Device.status),
     )
 
     recent_scan_objs = await crud_scan_job.get_recent(db, limit=10)
     recent_scans = [ScanJobRead.model_validate(j) for j in recent_scan_objs]
 
     return DashboardStats(
-        total_devices=total_devices,
-        active_devices=active_devices,
-        total_sites=total_sites,
-        total_cabinets=total_cabinets,
-        total_interfaces=total_interfaces,
-        total_cables=total_cables,
-        total_vlans=total_vlans,
-        total_prefixes=total_prefixes,
-        total_ip_addresses=total_ip_addresses,
+        devices_total=devices_total,
+        devices_active=devices_active,
+        sites_count=sites_count,
+        cabinets_count=cabinets_count,
+        interfaces_count=interfaces_count,
+        cables_count=cables_count,
+        vlans_count=vlans_count,
+        prefixes_count=prefixes_count,
+        ip_addresses_count=ip_addresses_count,
         pending_conflicts=pending_conflicts,
         recent_scans=recent_scans,
-        unmanaged_suspected=unmanaged_suspected,
+        suspected_unmanaged_switches=suspected_unmanaged_switches,
+        devices_by_type=devices_by_type,
+        devices_by_status=devices_by_status,
     )

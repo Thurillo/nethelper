@@ -6,15 +6,17 @@ from app.schemas.scan_job import ScanJobRead
 
 
 class DashboardStats(BaseModel):
-    total_devices: int
-    active_devices: int
-    total_sites: int
-    total_cabinets: int
-    total_interfaces: int
-    total_cables: int
-    total_vlans: int
-    total_prefixes: int
-    total_ip_addresses: int
+    devices_total: int
+    devices_active: int
+    sites_count: int
+    cabinets_count: int
+    interfaces_count: int
+    cables_count: int
+    vlans_count: int
+    prefixes_count: int
+    ip_addresses_count: int
     pending_conflicts: int
     recent_scans: list[ScanJobRead]
-    unmanaged_suspected: int
+    suspected_unmanaged_switches: int
+    devices_by_type: dict[str, int]
+    devices_by_status: dict[str, int]
