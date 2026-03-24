@@ -17,6 +17,8 @@ class IpAddressCreate(BaseModel):
     dns_name: Optional[str] = None
     description: Optional[str] = None
     source: IpAddressSource = IpAddressSource.manual
+    notes: Optional[str] = None
+    status: Optional[str] = None
 
 
 class IpAddressUpdate(BaseModel):
@@ -28,6 +30,15 @@ class IpAddressUpdate(BaseModel):
     dns_name: Optional[str] = None
     description: Optional[str] = None
     source: Optional[IpAddressSource] = None
+
+
+class _IpDevice(BaseModel):
+    id: int
+    name: str
+    vendor_name: Optional[str] = None
+    site_name: Optional[str] = None
+
+    model_config = {"from_attributes": True}
 
 
 class IpAddressRead(BaseModel):
@@ -42,5 +53,6 @@ class IpAddressRead(BaseModel):
     source: Optional[IpAddressSource] = None
     created_at: datetime
     updated_at: datetime
+    device: Optional[_IpDevice] = None
 
     model_config = {"from_attributes": True}

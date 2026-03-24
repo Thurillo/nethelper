@@ -11,7 +11,7 @@ from app.crud.ip_address import crud_ip_address
 from app.crud.ip_prefix import crud_ip_prefix
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
-from app.schemas.ip_address import IpAddressRead
+from app.schemas.ip_address import IpAddressRead, _IpDevice
 from app.schemas.ip_prefix import (
     IpPrefixCreate,
     IpPrefixRead,
@@ -169,12 +169,23 @@ async def get_prefix_ip_addresses(
     page: int = 1,
     size: int = 100,
 ) -> PaginatedResponse[IpAddressRead]:
-    from sqlalchemy import func, select as sa_select
-    from app.models.ip_address import IpAddress as IpAddressModel
+    from app.crud.ip_prefix import _cidr_str
     prefix = await crud_ip_prefix.get(db, prefix_id)
     if prefix is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prefix not found.")
-    ips = await crud_ip_address.get_by_prefix(db, prefix_id, skip=(page - 1) * size, limit=size)
-    total_res = await db.execute(sa_select(func.count()).select_from(IpAddressModel).where(IpAddressModel.prefix_id == prefix_id))
-    total = total_res.scalar_one()
-    return PaginatedResponse.build([IpAddressRead.model_validate(ip) for ip in ips], total=total, page=page, size=size)
+    cidr = _cidr_str(prefix.prefix)
+    ips = await crud_ip_address.get_by_prefix(db, prefix_id, cidr=cidr, skip=(page - 1) * size, limit=size)
+    total = await crud_ip_address.count_by_cidr(db, cidr) if cidr else 0
+
+    def _to_read(ip) -> IpAddressRead:
+        item = IpAddressRead.model_validate(ip)
+        if ip.device:
+            item = item.model_copy(update={"device": _IpDevice(
+                id=ip.device.id,
+                name=ip.device.name,
+                vendor_name=ip.device.vendor.name if ip.device.vendor else None,
+                site_name=ip.device.site.name if ip.device.site else None,
+            )})
+        return item
+
+    return PaginatedResponse.build([_to_read(ip) for ip in ips], total=total, page=page, size=size)

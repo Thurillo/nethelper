@@ -383,21 +383,29 @@ export interface PrefixUtilization {
   utilization_percent: number
 }
 
+export interface IpAddressDevice {
+  id: number
+  name: string
+  vendor_name: string | null
+  site_name: string | null
+}
+
 export interface IpAddress {
   id: number
   address: string
   prefix_id: number | null
   prefix?: IpPrefix
   device_id: number | null
-  device?: Device
+  device?: IpAddressDevice
   interface_id: number | null
   interface?: NetworkInterface
   dns_name: string | null
   status: 'active' | 'reserved' | 'deprecated' | 'dhcp' | 'slaac'
-  source: 'manual' | 'snmp' | 'scan' | 'dhcp'
+  source: string | null
   notes: string | null
   last_seen: string | null
   created_at: string
+  updated_at: string
 }
 
 export interface IpAddressCreate {

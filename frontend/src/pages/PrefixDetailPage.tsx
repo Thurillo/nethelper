@@ -4,8 +4,6 @@ import { Plus } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { prefixesApi } from '../api/prefixes'
 import { ipAddressesApi } from '../api/ipAddresses'
-import { format } from 'date-fns'
-import { it } from 'date-fns/locale'
 import { Badge } from '../components/common/Badge'
 import Modal from '../components/common/Modal'
 import Pagination from '../components/common/Pagination'
@@ -108,35 +106,44 @@ const PrefixDetailPage: React.FC = () => {
 
       {/* IP Addresses */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-200">
-          <h3 className="font-semibold text-gray-900">Indirizzi IP assegnati</h3>
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900">Indirizzi IP nel prefisso</h3>
+          {ipData && <span className="text-sm text-gray-400">{ipData.total} indirizzi trovati</span>}
         </div>
         {loadingIps ? <LoadingSpinner centered /> : (
           <>
             <table className="w-full text-sm">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Indirizzo</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">DNS</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Indirizzo IP</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">DNS / Hostname</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Dispositivo</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Stato</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Vendor</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Sede</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Sorgente</th>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Ultimo visto</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {ipData?.items.map((ip) => (
                   <tr key={ip.id} className="hover:bg-gray-50">
-                    <td className="px-5 py-3 font-mono font-medium text-gray-900">{ip.address}</td>
-                    <td className="px-5 py-3 text-gray-500">{ip.dns_name ?? '—'}</td>
-                    <td className="px-5 py-3 text-gray-600">{ip.device?.name ?? '—'}</td>
-                    <td className="px-5 py-3"><Badge variant={ip.status === 'active' ? 'green' : 'gray'}>{ip.status}</Badge></td>
-                    <td className="px-5 py-3 text-gray-500 text-xs">{ip.source}</td>
-                    <td className="px-5 py-3 text-gray-400 text-xs">{ip.last_seen ? format(new Date(ip.last_seen), 'dd/MM HH:mm', { locale: it }) : '—'}</td>
+                    <td className="px-5 py-3 font-mono font-semibold text-gray-900">{ip.address}</td>
+                    <td className="px-5 py-3 text-gray-500 text-xs">{ip.dns_name ?? '—'}</td>
+                    <td className="px-5 py-3">
+                      {ip.device
+                        ? <span className="font-medium text-primary-700">{ip.device.name}</span>
+                        : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-5 py-3 text-gray-500 text-xs">{ip.device?.vendor_name ?? '—'}</td>
+                    <td className="px-5 py-3 text-gray-500 text-xs">{ip.device?.site_name ?? '—'}</td>
+                    <td className="px-5 py-3">
+                      <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-medium ${ip.source === 'ip_range_scan' ? 'bg-blue-50 text-blue-700' : ip.source === 'manual' ? 'bg-gray-100 text-gray-600' : 'bg-purple-50 text-purple-700'}`}>
+                        {ip.source ?? '—'}
+                      </span>
+                    </td>
                   </tr>
                 ))}
                 {ipData?.items.length === 0 && (
-                  <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-500 text-sm">Nessun indirizzo assegnato</td></tr>
+                  <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-500 text-sm">Nessun indirizzo trovato in questo prefisso</td></tr>
                 )}
               </tbody>
             </table>
