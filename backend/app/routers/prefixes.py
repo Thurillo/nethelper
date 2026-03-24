@@ -58,8 +58,8 @@ async def list_prefixes(
     prefixes = await crud_ip_prefix.get_multi(db, skip=(page - 1) * size, limit=size, **kwargs)
     _total = await crud_ip_prefix.count(db)
 
-    # Batch-fetch used IP counts (single query)
-    used_map = await crud_ip_prefix.get_used_counts(db, [p.id for p in prefixes])
+    # Count IPs by CIDR range match (includes IPs with prefix_id=NULL)
+    used_map = await crud_ip_prefix.get_used_counts(db, prefixes)
     items = [_enrich(p, used_map.get(p.id, 0)) for p in prefixes]
 
     return PaginatedResponse.build(items, total=_total, page=page, size=size)
@@ -95,7 +95,7 @@ async def get_prefix(
     prefix = await crud_ip_prefix.get(db, prefix_id)
     if prefix is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prefix not found.")
-    used_map = await crud_ip_prefix.get_used_counts(db, [prefix_id])
+    used_map = await crud_ip_prefix.get_used_counts(db, [prefix])
     return _enrich(prefix, used_map.get(prefix_id, 0))
 
 
@@ -115,7 +115,7 @@ async def update_prefix(
     await log_action(db, user_id=current_user.id, action="update", entity_table="ip_prefix",
                      entity_id=updated.id, client_ip=client_ip,
                      description=f"Updated prefix '{updated.prefix}'.")
-    used_map = await crud_ip_prefix.get_used_counts(db, [prefix_id])
+    used_map = await crud_ip_prefix.get_used_counts(db, [updated])
     return _enrich(updated, used_map.get(prefix_id, 0))
 
 

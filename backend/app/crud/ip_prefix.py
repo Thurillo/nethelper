@@ -3,7 +3,8 @@ from __future__ import annotations
 from ipaddress import IPv4Network, IPv6Network, ip_address as parse_ip, ip_network
 from typing import Union
 
-from sqlalchemy import func, select
+from sqlalchemy import cast, func, select, update
+from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,6 +12,14 @@ from app.crud.base import CRUDBase
 from app.models.ip_address import IpAddress
 from app.models.ip_prefix import IpPrefix
 from app.schemas.ip_prefix import IpPrefixCreate, IpPrefixUpdate, PrefixUtilization
+
+
+def _cidr_str(prefix_str: str) -> str | None:
+    """Return normalized CIDR string for the prefix, or None on error."""
+    try:
+        return str(ip_network(prefix_str, strict=False))
+    except ValueError:
+        return None
 
 
 class CRUDIpPrefix(CRUDBase[IpPrefix, IpPrefixCreate, IpPrefixUpdate]):
@@ -47,16 +56,64 @@ class CRUDIpPrefix(CRUDBase[IpPrefix, IpPrefixCreate, IpPrefixUpdate]):
         )
         return result.scalar_one_or_none()
 
-    async def get_used_counts(self, db: AsyncSession, prefix_ids: list[int]) -> dict[int, int]:
-        """Return {prefix_id: assigned_ip_count} for the given prefix IDs (single query)."""
-        if not prefix_ids:
-            return {}
+    async def _count_ips_in_cidr(self, db: AsyncSession, cidr: str) -> int:
+        """Count all ip_address rows whose address falls within the given CIDR using PostgreSQL inet ops."""
         result = await db.execute(
-            select(IpAddress.prefix_id, func.count(IpAddress.id))
-            .where(IpAddress.prefix_id.in_(prefix_ids))
-            .group_by(IpAddress.prefix_id)
+            select(func.count(IpAddress.id)).where(
+                cast(IpAddress.address, INET).op("<<")(cast(cidr, INET))
+            )
         )
-        return {row[0]: row[1] for row in result.all()}
+        return result.scalar_one()
+
+    async def get_used_counts(self, db: AsyncSession, prefixes: list[IpPrefix]) -> dict[int, int]:
+        """Return {prefix_id: ip_count} counting ALL IPs that fall within each prefix CIDR."""
+        result = {}
+        for p in prefixes:
+            cidr = _cidr_str(p.prefix)
+            result[p.id] = await self._count_ips_in_cidr(db, cidr) if cidr else 0
+        return result
+
+    async def assign_prefix_ids(self, db: AsyncSession) -> int:
+        """
+        For every ip_address with prefix_id=NULL, find the smallest containing prefix
+        and set prefix_id accordingly. Returns count of updated rows.
+        """
+        # Load all prefixes
+        prefixes_res = await db.execute(select(IpPrefix))
+        prefixes = list(prefixes_res.scalars().all())
+
+        # Build network objects sorted by prefix length desc (most specific first)
+        nets: list[tuple[IpPrefix, IPv4Network | IPv6Network]] = []
+        for p in prefixes:
+            try:
+                nets.append((p, ip_network(p.prefix, strict=False)))
+            except ValueError:
+                pass
+        nets.sort(key=lambda x: x[1].prefixlen, reverse=True)
+
+        # Fetch all IPs without a prefix_id
+        ips_res = await db.execute(
+            select(IpAddress).where(IpAddress.prefix_id.is_(None))
+        )
+        unlinked = list(ips_res.scalars().all())
+
+        updated = 0
+        for ip_obj in unlinked:
+            raw = ip_obj.address.split("/")[0]
+            try:
+                addr = parse_ip(raw)
+            except ValueError:
+                continue
+            for prefix_obj, net in nets:
+                if addr in net:
+                    ip_obj.prefix_id = prefix_obj.id
+                    db.add(ip_obj)
+                    updated += 1
+                    break
+
+        if updated:
+            await db.flush()
+        return updated
 
     async def get_utilization(
         self, db: AsyncSession, prefix_id: int
@@ -65,23 +122,17 @@ class CRUDIpPrefix(CRUDBase[IpPrefix, IpPrefixCreate, IpPrefixUpdate]):
         if prefix_obj is None:
             return None
 
-        try:
-            network: Union[IPv4Network, IPv6Network] = ip_network(
-                prefix_obj.prefix, strict=False
-            )
-        except ValueError:
+        cidr = _cidr_str(prefix_obj.prefix)
+        if cidr is None:
             return None
 
+        network = ip_network(prefix_obj.prefix, strict=False)
         if isinstance(network, IPv4Network):
             total = max(network.num_addresses - 2, 0) if network.prefixlen < 31 else network.num_addresses
         else:
             total = network.num_addresses
 
-        result = await db.execute(
-            select(IpAddress).where(IpAddress.prefix_id == prefix_id)
-        )
-        used_ips = list(result.scalars().all())
-        used = len(used_ips)
+        used = await self._count_ips_in_cidr(db, cidr)
         free = max(total - used, 0)
         utilization_pct = round((used / total * 100) if total > 0 else 0.0, 2)
 
@@ -106,7 +157,9 @@ class CRUDIpPrefix(CRUDBase[IpPrefix, IpPrefixCreate, IpPrefixUpdate]):
             return []
 
         result = await db.execute(
-            select(IpAddress.address).where(IpAddress.prefix_id == prefix_id)
+            select(IpAddress.address).where(
+                cast(IpAddress.address, INET).op("<<")(cast(str(network), INET))
+            )
         )
         assigned_raw = {row[0] for row in result.all()}
         assigned = set()
@@ -117,8 +170,7 @@ class CRUDIpPrefix(CRUDBase[IpPrefix, IpPrefixCreate, IpPrefixUpdate]):
                 pass
 
         available: list[str] = []
-        hosts = list(network.hosts()) if network.version == 4 else list(network.hosts())
-        for host in hosts:
+        for host in network.hosts():
             if str(host) not in assigned:
                 available.append(str(host))
             if len(available) >= limit:
