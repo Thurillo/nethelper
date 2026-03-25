@@ -194,6 +194,8 @@ export interface Device {
   ssh_key_path: string | null
   notes: string | null
   last_seen: string | null
+  is_unmanaged_suspected?: boolean
+  checkmk_host_name: string | null
   interfaces_count?: number
   created_at: string
   updated_at: string
@@ -737,4 +739,17 @@ export interface AuditLogFilters {
   to_dt?: string
   page?: number
   size?: number
+}
+
+// ============================================================
+// CHECKMK INTEGRATION
+// ============================================================
+
+export type CheckMKStatus = 'up' | 'down' | 'unreachable' | 'pending' | 'not_found' | 'not_linked'
+
+export interface CheckMKDeviceStatus {
+  host_name: string
+  state: number
+  state_label: CheckMKStatus
+  address: string
 }

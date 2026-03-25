@@ -2,12 +2,14 @@ import React, { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { it } from 'date-fns/locale'
-import { Edit2, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { Edit2, ChevronDown, ChevronRight, Eye, EyeOff, Link2, Link2Off } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDevice, useDeviceInterfaces, useDeviceIpAddresses, useDeviceMacEntries, useUpdateDevice } from '../hooks/useDevices'
 import { cabinetsApi } from '../api/cabinets'
 import { vendorsApi } from '../api/vendors'
+import { checkmkApi } from '../api/checkmk'
 import { DeviceTypeBadge, DeviceStatusBadge } from '../components/common/Badge'
+import CheckMKBadge from '../components/common/CheckMKBadge'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import Modal from '../components/common/Modal'
 import ScanLauncher from '../components/scan/ScanLauncher'
@@ -34,6 +36,8 @@ const DeviceDetailPage: React.FC = () => {
   const [showCredsSection, setShowCredsSection] = useState(false)
   const [showSnmpV3, setShowSnmpV3] = useState(false)
   const [showSshPass, setShowSshPass] = useState(false)
+  const [selectedCheckMKHost, setSelectedCheckMKHost] = useState('')
+  const qc = useQueryClient()
 
   const { data: device, isLoading } = useDevice(deviceId)
   const { data: interfaces } = useDeviceInterfaces(deviceId)
@@ -42,6 +46,28 @@ const DeviceDetailPage: React.FC = () => {
   const { data: cabinetsData } = useQuery({ queryKey: ['cabinets', 'all'], queryFn: () => cabinetsApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: vendorsData } = useQuery({ queryKey: ['vendors', 'all'], queryFn: () => vendorsApi.list({ size: 100 }), staleTime: 60_000 })
   const updateDevice = useUpdateDevice()
+
+  // CheckMK
+  const { data: checkmkStatus } = useQuery({
+    queryKey: ['checkmk', 'status'],
+    queryFn: checkmkApi.getStatus,
+    staleTime: 60_000,
+    retry: false,
+  })
+  const { data: checkmkHosts } = useQuery({
+    queryKey: ['checkmk', 'hosts'],
+    queryFn: checkmkApi.getHosts,
+    staleTime: 120_000,
+    retry: false,
+  })
+  const linkMutation = useMutation({
+    mutationFn: (hostName: string) => checkmkApi.linkDevice(deviceId, hostName),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['device', deviceId] }); qc.invalidateQueries({ queryKey: ['checkmk', 'status'] }) },
+  })
+  const unlinkMutation = useMutation({
+    mutationFn: () => checkmkApi.unlinkDevice(deviceId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['device', deviceId] }); qc.invalidateQueries({ queryKey: ['checkmk', 'status'] }) },
+  })
 
   const openEdit = () => {
     if (!device) return
@@ -208,6 +234,68 @@ const DeviceDetailPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* CheckMK Monitoring */}
+      {(checkmkStatus !== undefined || device.checkmk_host_name || isAdmin()) && checkmkHosts !== undefined && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-gray-200 bg-gray-50">
+            <Link2 size={16} className="text-blue-500" />
+            <span className="text-sm font-semibold text-gray-700">Monitoraggio CheckMK</span>
+            {device.checkmk_host_name && checkmkStatus && (() => {
+              const s = checkmkStatus[device.id]
+              return s ? <CheckMKBadge status={s.state_label as any} /> : null
+            })()}
+          </div>
+          <div className="p-4">
+            {device.checkmk_host_name ? (
+              <div className="flex items-center gap-4 flex-wrap">
+                <div>
+                  <p className="text-xs text-gray-500">Host collegato</p>
+                  <p className="text-sm font-mono font-medium text-gray-800">{device.checkmk_host_name}</p>
+                  {checkmkStatus?.[device.id]?.address && (
+                    <p className="text-xs text-gray-400 font-mono">{checkmkStatus[device.id].address}</p>
+                  )}
+                </div>
+                {isAdmin() && (
+                  <button
+                    onClick={() => unlinkMutation.mutate()}
+                    disabled={unlinkMutation.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 disabled:opacity-50 ml-auto"
+                  >
+                    <Link2Off size={13} />
+                    Scollega
+                  </button>
+                )}
+              </div>
+            ) : isAdmin() ? (
+              <div className="flex items-center gap-3 flex-wrap">
+                <select
+                  value={selectedCheckMKHost}
+                  onChange={(e) => setSelectedCheckMKHost(e.target.value)}
+                  className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">— Seleziona host CheckMK —</option>
+                  {checkmkHosts?.map((h) => (
+                    <option key={h.name} value={h.name}>
+                      {h.name}{h.address ? ` (${h.address})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => { if (selectedCheckMKHost) linkMutation.mutate(selectedCheckMKHost) }}
+                  disabled={!selectedCheckMKHost || linkMutation.isPending}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                >
+                  <Link2 size={14} />
+                  Collega
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">Nessun host CheckMK collegato.</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 bg-white rounded-t-xl">

@@ -43,6 +43,7 @@ NetHelper è un'alternativa semplificata a NetBox, pensata per reti di piccole e
 | 🔐 **Autenticazione** | JWT con ruoli **Admin** (lettura/scrittura) e **Sola lettura** |
 | 🤖 **REST API** | Tutte le funzionalità esposte via API — compatibile con n8n e Telegram bot |
 | 📖 **Guida integrata** | Documentazione d'uso disponibile direttamente nell'interfaccia web |
+| 🔗 **Integrazione CheckMK** | Collegamento device NetHelper ↔ host CheckMK con badge UP/DOWN/UNREACHABLE in tempo reale |
 
 ---
 
@@ -517,6 +518,44 @@ VENDOR_DRIVERS = {
 3. **Inserire il record vendor** via interfaccia web (**Impostazioni → Vendor**) o con `seed_vendors.py`.
 
 > Per switch che usano solo SNMP standard + LLDP, non serve scrivere un driver: basta inserire il vendor con `driver_class: "generic_lldp"`.
+
+---
+
+## 🔗 Integrazione CheckMK
+
+NetHelper può collegarsi a **CheckMK RAW 2.4** per mostrare lo stato UP/DOWN/UNREACHABLE direttamente nella lista dispositivi e nel dettaglio.
+
+### Prerequisiti
+
+- CheckMK RAW 2.4 o superiore
+- Utente `automation` con API key generata nella console CheckMK
+
+### Configurazione
+
+1. Accedi a **Admin → Supporto → Integrazioni**
+2. Inserisci URL base (es. `http://192.168.1.100/cmk`), username `automation` e API key
+3. Abilita l'integrazione con il toggle e clicca **Salva**
+4. Clicca **Verifica connessione** per confermare che tutto funzioni
+
+### Collegamento device ↔ host
+
+1. Apri il dettaglio di un dispositivo
+2. Nella sezione **Monitoraggio CheckMK**, seleziona l'host dal dropdown
+3. Clicca **Collega**
+4. Il badge UP/DOWN appare nella lista dispositivi e nel dettaglio
+
+### Badge di stato
+
+| Badge | Significato |
+|-------|-------------|
+| ● UP (verde) | Il dispositivo risponde in CheckMK |
+| ● DOWN (rosso) | Il dispositivo non risponde |
+| ● UNREACHABLE (arancio) | Nodo non raggiungibile (parent down) |
+| ○ PENDING (grigio) | Check in attesa del primo risultato |
+| ⚠ non trovato (giallo) | Collegato in NetHelper ma assente in CheckMK |
+| *(nessun badge)* | Dispositivo non collegato a CheckMK |
+
+Le discrepanze vengono gestite silenziosamente — nessun errore se un IP non è presente in CheckMK.
 
 ---
 

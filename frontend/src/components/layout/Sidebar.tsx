@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, MapPin, Server, Network, GitBranch, Grid3X3,
   Layers, Globe, Scan, Clock, AlertTriangle, History, Users,
-  Building2, LogOut, ChevronLeft, ChevronRight, Wifi, Cable, HardDrive, BookOpen, ArrowUpCircle
+  Building2, LogOut, ChevronLeft, ChevronRight, Wifi, Cable, HardDrive, BookOpen, ArrowUpCircle, Plug
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '../../store/authStore'
@@ -49,6 +49,7 @@ const adminNav: NavItem[] = [
 
 const helpNav: NavItem[] = [
   { to: '/guida', icon: <BookOpen size={17} />, label: 'Guida all\'uso' },
+  { to: '/integrazioni', icon: <Plug size={17} />, label: 'Integrazioni', adminOnly: true },
   { to: '/aggiornamento', icon: <ArrowUpCircle size={17} />, label: 'Aggiornamento', adminOnly: true },
 ]
 

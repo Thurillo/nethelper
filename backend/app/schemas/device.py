@@ -73,6 +73,7 @@ class DeviceUpdate(BaseModel):
     ssh_port: Optional[int] = None
     notes: Optional[str] = None
     is_unmanaged_suspected: Optional[bool] = None
+    checkmk_host_name: Optional[str] = None
 
     @field_validator('mac_address', mode='before')
     @classmethod
@@ -111,6 +112,7 @@ class DeviceRead(BaseModel):
     notes: Optional[str] = None
     last_seen: Optional[datetime] = None
     is_unmanaged_suspected: bool
+    checkmk_host_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     cabinet_name: Optional[str] = None

@@ -18,6 +18,8 @@ import { DeviceTypeBadge, DeviceStatusBadge } from '../components/common/Badge'
 import { format } from 'date-fns'
 import { it } from 'date-fns/locale'
 import type { Device, DeviceCreate, DeviceType, DeviceStatus, DeviceFilters } from '../types'
+import { checkmkApi } from '../api/checkmk'
+import CheckMKBadge from '../components/common/CheckMKBadge'
 
 // Patch panel are managed via the dedicated Patch Panel section
 const DEVICE_TYPES: DeviceType[] = ['switch', 'router', 'access_point', 'server', 'patch_panel', 'pdu', 'firewall', 'ups', 'unmanaged_switch', 'workstation', 'printer', 'camera', 'phone', 'other']
@@ -53,7 +55,7 @@ const DevicesPage: React.FC = () => {
   const [colMenuOpen, setColMenuOpen] = useState(false)
   const colMenuRef = useRef<HTMLDivElement>(null)
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
-    new Set(['name', 'device_type', 'primary_ip', 'mac_address', 'cabinet', 'status', 'vendor', 'model', 'notes', 'last_seen'])
+    new Set(['name', 'device_type', 'primary_ip', 'mac_address', 'cabinet', 'status', 'vendor', 'model', 'notes', 'last_seen', 'checkmk'])
   )
 
   useEffect(() => {
@@ -71,6 +73,7 @@ const DevicesPage: React.FC = () => {
   const { data: sitesData } = useQuery({ queryKey: ['sites', 'all'], queryFn: () => sitesApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: cabinetsData } = useQuery({ queryKey: ['cabinets', 'all'], queryFn: () => cabinetsApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: vendorsData } = useQuery({ queryKey: ['vendors', 'all'], queryFn: () => vendorsApi.list({ size: 100 }), staleTime: 60_000 })
+  const { data: checkmkStatus } = useQuery({ queryKey: ['checkmk', 'status'], queryFn: checkmkApi.getStatus, staleTime: 60_000, retry: false })
 
   const createDevice = useMutation({
     mutationFn: (d: DeviceCreate) => devicesApi.create(d),
@@ -166,6 +169,12 @@ const DevicesPage: React.FC = () => {
         : <span className="text-gray-300 text-xs">—</span>
     )},
     { key: 'last_seen', header: 'Ultimo scan', render: (d) => <span className="text-gray-400 text-xs">{d.last_seen ? format(new Date(d.last_seen), 'dd/MM HH:mm', { locale: it }) : '—'}</span> },
+    { key: 'checkmk', header: 'CheckMK', render: (d) => {
+      if (!checkmkStatus) return null
+      const s = checkmkStatus[d.id]
+      if (!s) return d.checkmk_host_name ? <CheckMKBadge status="not_found" /> : null
+      return <CheckMKBadge status={s.state_label as any} />
+    }},
   ]
 
   const columns: Column<Device>[] = allColumns.filter(c => c.key === 'actions' || visibleCols.has(c.key as string))

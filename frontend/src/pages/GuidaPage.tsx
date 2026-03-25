@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import {
   BookOpen, ChevronDown, ChevronRight, Scan, Server, Network,
   AlertTriangle, Globe, Grid3X3, GitBranch, Download,
-  Terminal, Shield, Users, Zap, Search, TrendingUp, Map
+  Terminal, Shield, Users, Zap, Search, TrendingUp, Map, Plug
 } from 'lucide-react'
 
 interface Section {
@@ -555,6 +555,46 @@ systemctl status nethelper-api nethelper-worker nethelper-beat
 
 # Riavvio completo
 systemctl restart nethelper-api nethelper-worker nethelper-beat`}</CodeBlock>
+      </>
+    ),
+  },
+  {
+    id: 'checkmk',
+    icon: <Plug size={18} />,
+    title: 'Integrazione CheckMK — Monitoraggio UP/DOWN',
+    content: (
+      <>
+        <p>NetHelper può collegarsi a <strong>CheckMK RAW 2.4</strong> per mostrare lo stato di monitoraggio (UP/DOWN/UNREACHABLE) direttamente nella lista dispositivi e nel dettaglio.</p>
+        <p className="font-medium mt-2">Prerequisiti:</p>
+        <ul>
+          <li>CheckMK RAW 2.4 o superiore con utente <Code>automation</Code> abilitato e API key generata</li>
+          <li>Accesso HTTP/HTTPS da NetHelper al server CheckMK</li>
+        </ul>
+        <p className="font-medium mt-2">1. Configurazione connessione (Admin → Integrazioni):</p>
+        <ul>
+          <li>URL base: es. <Code>http://192.168.1.100/cmk</Code> oppure <Code>https://checkmk.azienda.it/cmk</Code></li>
+          <li>Username: <Code>automation</Code></li>
+          <li>API Key: incolla la chiave generata nella console CheckMK — viene cifrata con AES-256 nel database</li>
+          <li>Abilita l'integrazione con il toggle e clicca <strong>Salva</strong></li>
+          <li>Clicca <strong>Verifica connessione</strong> per testare — viene mostrata la versione CheckMK se OK</li>
+        </ul>
+        <p className="font-medium mt-2">2. Collegamento device ↔ host CheckMK:</p>
+        <ul>
+          <li>Apri il dettaglio di un dispositivo</li>
+          <li>Nella sezione <strong>Monitoraggio CheckMK</strong>, seleziona l'host dal dropdown (cerca per nome o IP)</li>
+          <li>Clicca <strong>Collega</strong> — il dispositivo è ora associato all'host CheckMK</li>
+          <li>Per scollegare, clicca <strong>Scollega</strong></li>
+        </ul>
+        <p className="font-medium mt-2">Significato dei badge:</p>
+        <ul>
+          <li><strong className="text-green-700">● UP</strong> — il dispositivo risponde in CheckMK</li>
+          <li><strong className="text-red-700">● DOWN</strong> — il dispositivo non risponde</li>
+          <li><strong className="text-orange-700">● UNREACHABLE</strong> — nodo non raggiungibile (parent down)</li>
+          <li><strong className="text-gray-500">○ PENDING</strong> — check in attesa del primo risultato</li>
+          <li><strong className="text-yellow-700">⚠ non trovato</strong> — collegato in NetHelper ma assente in CheckMK</li>
+          <li><em className="text-gray-400">nessun badge</em> — dispositivo non collegato a nessun host CheckMK</li>
+        </ul>
+        <p className="text-gray-500 text-sm mt-2">I dispositivi senza collegamento non mostrano badge e non generano alcun errore. Le discrepanze (IP non trovato, host rinominato) vengono gestite silenziosamente.</p>
       </>
     ),
   },

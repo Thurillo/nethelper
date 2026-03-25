@@ -90,6 +90,7 @@ def create_app() -> FastAPI:
         backup,
         cabinets,
         cables,
+        checkmk,
         conflicts,
         connections,
         dashboard,
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(connections.router, prefix=api_prefix)
     app.include_router(backup.router, prefix=api_prefix)
     app.include_router(system.router, prefix=api_prefix)
+    app.include_router(checkmk.router, prefix=api_prefix)
 
     # ----------------------------------------------------------------
     # Health check

@@ -134,6 +134,9 @@ class Device(Base):
     is_unmanaged_suspected: Mapped[bool] = mapped_column(
         sa.Boolean, nullable=False, default=False, server_default=sa.false()
     )
+    checkmk_host_name: Mapped[Optional[str]] = mapped_column(
+        sa.String(255), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,

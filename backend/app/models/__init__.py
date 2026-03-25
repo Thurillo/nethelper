@@ -23,6 +23,7 @@ from app.models.scan_conflict import ScanConflict, ConflictType, ConflictStatus 
 from app.models.audit_log import AuditLog, AuditAction  # noqa: F401
 from app.models.scheduled_scan import ScheduledScan  # noqa: F401
 from app.models.dashboard_snapshot import DashboardSnapshot  # noqa: F401
+from app.models.app_setting import AppSetting  # noqa: F401
 
 __all__ = [
     "User",
@@ -56,4 +57,5 @@ __all__ = [
     "AuditAction",
     "ScheduledScan",
     "DashboardSnapshot",
+    "AppSetting",
 ]
