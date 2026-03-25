@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   RefreshCw, GitCommit, CheckCircle2, XCircle,
-  AlertCircle, Download, RotateCcw, GitBranch, Clock,
+  AlertCircle, Download, RotateCcw, GitBranch, Clock, Hammer,
 } from 'lucide-react'
 import { systemApi } from '../api/system'
 import type { UpdateCheckResult } from '../api/system'
@@ -46,6 +46,7 @@ const UpdatePage: React.FC = () => {
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'running' | 'ok' | 'error'>('idle')
   const [waitingRestart, setWaitingRestart] = useState(false)
   const [serverBack, setServerBack] = useState(false)
+  const [rebuilding, setRebuilding] = useState(false)
 
   const logBoxRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -128,6 +129,60 @@ const UpdatePage: React.FC = () => {
       setUpdateStatus('ok')
       setWaitingRestart(true)
       startPolling()
+    }
+  }
+
+  // ── Force rebuild frontend ─────────────────────────────────────────────────
+  const handleRebuild = async () => {
+    setLogs([])
+    setRebuilding(true)
+    setUpdating(true)
+    setUpdateStatus('running')
+    setWaitingRestart(false)
+    setServerBack(false)
+
+    try {
+      const response = await systemApi.rebuildFrontend()
+      if (!response.body) throw new Error('No stream')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const entry: LogEntry = JSON.parse(line.slice(6))
+            if (entry.level === 'done') {
+              if (entry.msg === '__DONE_OK__') {
+                setUpdateStatus('ok')
+                setWaitingRestart(true)
+                startPolling()
+              } else {
+                setUpdateStatus('error')
+                setUpdating(false)
+              }
+            } else {
+              setLogs(prev => [...prev, entry])
+            }
+          } catch { /* ignore malformed */ }
+        }
+      }
+    } catch {
+      setLogs(prev => [...prev, { msg: 'Connessione interrotta (atteso dopo il riavvio)', level: 'warn' }])
+      setUpdateStatus('ok')
+      setWaitingRestart(true)
+      startPolling()
+    } finally {
+      setRebuilding(false)
     }
   }
 
@@ -251,6 +306,26 @@ const UpdatePage: React.FC = () => {
           </>
         )}
       </div>
+
+      {/* ── Ricompila frontend manualmente ── */}
+      {isAdmin() && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-3">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            Strumenti di recupero
+          </h2>
+          <p className="text-xs text-gray-500">
+            Usa questi strumenti se un aggiornamento precedente è fallito prima di completarsi (es. build frontend mancante).
+          </p>
+          <button
+            onClick={handleRebuild}
+            disabled={updating || rebuilding}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            <Hammer size={14} />
+            {rebuilding ? 'Ricompilazione...' : 'Ricompila frontend'}
+          </button>
+        </div>
+      )}
 
       {/* ── Log aggiornamento ── */}
       {(logs.length > 0 || waitingRestart || serverBack) && (

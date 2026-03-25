@@ -40,4 +40,13 @@ export const systemApi = {
       headers: { Authorization: `Bearer ${token}` },
     })
   },
+
+  /** Force a frontend rebuild (recovery after a failed update). */
+  rebuildFrontend: (): Promise<Response> => {
+    const token = localStorage.getItem('access_token') ?? ''
+    return fetch('/api/v1/system/update/rebuild-frontend', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+  },
 }

@@ -263,7 +263,10 @@
       "Bash(ssh root@192.168.1.3 \"cd /opt/nethelper && git pull origin master 2>&1\")",
       "Bash(ssh root@192.168.1.3 \"cd /opt/nethelper/frontend && npm install --silent && npm run build 2>&1 | tail -5\")",
       "Bash(ssh root@192.168.1.3 \"cd /opt/nethelper && git pull origin master && cd frontend && npm run build 2>&1 | tail -8\")",
-      "Bash(ssh root@192.168.1.3 \"systemctl restart nethelper-backend && sleep 2 && systemctl is-active nethelper-backend\")"
+      "Bash(ssh root@192.168.1.3 \"systemctl restart nethelper-backend && sleep 2 && systemctl is-active nethelper-backend\")",
+      "Bash(Remove-Item -Recurse -Force \"C:\\\\Claude\\\\GDRHelper\\\\frontend\\\\node_modules\\\\.vite\" -ErrorAction SilentlyContinue)",
+      "Bash(Write-Host \"done\")",
+      "Bash(grep -n \"revision\\\\|down_revision\" C:/Claude/GDRHelper/backend/alembic/versions/*.py)"
     ]
   }
 }

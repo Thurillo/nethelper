@@ -128,23 +128,51 @@ async def apply_update(_: Annotated[object, Depends(require_admin)]):
             yield emit("    Nessuna migrazione da applicare")
         yield emit("✓   Database OK")
 
-        # ── 4. Frontend (solo se modificato) ────────────────────────
-        if not already_uptodate:
+        # ── 4. Frontend (solo se modificato rispetto all'ultimo build) ──
+        # Usiamo un file .frontend_built_hash per tracciare l'ultimo hash
+        # effettivamente compilato — così se un update precedente è fallito
+        # prima del build, il prossimo aggiornamento recupera correttamente.
+        built_hash_file = APP_DIR / ".frontend_built_hash"
+        _, current_head = await asyncio.to_thread(_sh, "git rev-parse HEAD")
+        current_head = current_head.strip()
+
+        last_built = ""
+        if built_hash_file.exists():
+            last_built = built_hash_file.read_text().strip()
+
+        if not last_built:
+            # Prima volta o file mancante: controlla se il dist esiste già
+            dist_index = FRONTEND_DIR / "dist" / "index.html"
+            if dist_index.exists():
+                # Dist già presente: confronta con ORIG_HEAD come fallback
+                _, changed = await asyncio.to_thread(
+                    _sh,
+                    "git diff --name-only ORIG_HEAD HEAD 2>/dev/null | grep 'frontend/src' || true"
+                )
+                needs_build = changed.strip() != ""
+            else:
+                needs_build = True
+        else:
             _, changed = await asyncio.to_thread(
                 _sh,
-                "git diff --name-only ORIG_HEAD HEAD 2>/dev/null | grep 'frontend/src' || true"
+                f"git diff --name-only {last_built} HEAD 2>/dev/null | grep 'frontend/src' || true"
             )
-            if changed.strip():
-                yield emit("🔨  Ricompilazione frontend (file modificati)...")
-                rc, out = await asyncio.to_thread(
-                    _sh, "npm install --silent && npm run build", FRONTEND_DIR
-                )
-                if rc != 0:
-                    yield emit(f"⚠   Build frontend: {out}", "warn")
-                else:
-                    yield emit("✓   Frontend ricompilato")
+            needs_build = changed.strip() != ""
+
+        if needs_build:
+            yield emit("🔨  Ricompilazione frontend (file modificati)...")
+            rc, out = await asyncio.to_thread(
+                _sh, "npm install --silent && npm run build", FRONTEND_DIR
+            )
+            if rc != 0:
+                yield emit(f"⚠   Build frontend: {out}", "warn")
             else:
-                yield emit("⏭   Frontend invariato, salto la compilazione")
+                built_hash_file.write_text(current_head)
+                yield emit("✓   Frontend ricompilato")
+        else:
+            # Aggiorna il file anche se non serve il build (hash già aggiornato)
+            built_hash_file.write_text(current_head)
+            yield emit("⏭   Frontend invariato, salto la compilazione")
 
         # ── 5. Riavvio servizio ──────────────────────────────────────
         yield emit("🔄  Riavvio servizio backend...")
@@ -170,5 +198,54 @@ async def apply_update(_: Annotated[object, Depends(require_admin)]):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",  # Disabilita buffering Nginx
+        },
+    )
+
+
+@router.post("/update/rebuild-frontend")
+async def rebuild_frontend(_: Annotated[object, Depends(require_admin)]):
+    """Force a frontend rebuild (npm install && npm run build). Admin only.
+    Used to recover when a previous update failed before the build step.
+    """
+
+    async def _stream() -> AsyncGenerator[str, None]:
+        def emit(msg: str, level: str = "info") -> str:
+            return f"data: {json.dumps({'msg': msg, 'level': level})}\n\n"
+
+        yield emit("🔨  Avvio ricompilazione frontend forzata...")
+        rc, out = await asyncio.to_thread(
+            _sh, "npm install --silent && npm run build", FRONTEND_DIR
+        )
+        if rc != 0:
+            yield emit(f"❌  Build frontend fallito:\n{out}", "error")
+            yield emit("__DONE_ERROR__", "done")
+            return
+
+        # Update the built hash
+        built_hash_file = APP_DIR / ".frontend_built_hash"
+        _, current_head = await asyncio.to_thread(_sh, "git rev-parse HEAD")
+        built_hash_file.write_text(current_head.strip())
+
+        yield emit("✓   Frontend ricompilato con successo")
+
+        # Restart service
+        yield emit("🔄  Riavvio servizio backend...")
+        for svc in ("nethelper-backend", "nethelper-api"):
+            rc_svc, _ = await asyncio.to_thread(_sh, f"systemctl is-active {svc}")
+            if rc_svc == 0:
+                _sh(f"nohup sh -c 'sleep 3 && systemctl restart {svc}' > /dev/null 2>&1 &")
+                yield emit(f"✓   {svc} si riavvierà tra 3 secondi")
+                break
+        else:
+            yield emit("⚠   Servizio non trovato — riavvia manualmente", "warn")
+
+        yield emit("__DONE_OK__", "done")
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
         },
     )
