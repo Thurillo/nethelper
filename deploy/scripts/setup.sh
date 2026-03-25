@@ -155,7 +155,7 @@ do_install() {
     su - "$APP_USER" -c "
         source $APP_DIR/venv/bin/activate
         cd $APP_DIR/backend
-        alembic upgrade head
+        PYTHONPATH=$APP_DIR/backend alembic upgrade head
     "
     ok "Migrazioni completate."
 
@@ -279,7 +279,7 @@ do_update() {
     su - "$APP_USER" -c "
         source $APP_DIR/venv/bin/activate
         cd $APP_DIR/backend
-        alembic upgrade head
+        PYTHONPATH=$APP_DIR/backend alembic upgrade head
     "
     ok "Migrazioni completate."
 

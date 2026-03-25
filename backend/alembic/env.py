@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from logging.config import fileConfig
+from pathlib import Path
+
+# Ensure the 'app' package is importable regardless of CWD or PYTHONPATH.
+# __file__ = .../backend/alembic/env.py → parents[1] = .../backend
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from alembic import context
 from sqlalchemy import pool
