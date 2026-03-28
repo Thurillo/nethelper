@@ -196,6 +196,8 @@ export interface Device {
   last_seen: string | null
   is_unmanaged_suspected?: boolean
   checkmk_host_name: string | null
+  plan_x: number | null
+  plan_y: number | null
   interfaces_count?: number
   created_at: string
   updated_at: string

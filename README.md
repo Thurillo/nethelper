@@ -44,6 +44,7 @@ NetHelper è un'alternativa semplificata a NetBox, pensata per reti di piccole e
 | 🤖 **REST API** | Tutte le funzionalità esposte via API — compatibile con n8n e Telegram bot |
 | 📖 **Guida integrata** | Documentazione d'uso disponibile direttamente nell'interfaccia web |
 | 🔗 **Integrazione CheckMK** | Collegamento device NetHelper ↔ host CheckMK con badge UP/DOWN/UNREACHABLE in tempo reale |
+| 🗺️ **Diagramma di rete interattivo** | Posiziona dispositivi sulla planimetria aziendale, visualizza connessioni fisiche (cavi), filtra per tipo (Switch, Stampanti, Telefoni, ecc.) |
 
 ---
 

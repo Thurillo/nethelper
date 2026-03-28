@@ -137,6 +137,12 @@ class Device(Base):
     checkmk_host_name: Mapped[Optional[str]] = mapped_column(
         sa.String(255), nullable=True
     )
+
+    # ------------------------------------------------------------------
+    # Network diagram positioning (percentage 0–100 on 2000×1200 canvas)
+    # ------------------------------------------------------------------
+    plan_x: Mapped[Optional[float]] = mapped_column(sa.Float, nullable=True)
+    plan_y: Mapped[Optional[float]] = mapped_column(sa.Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
         nullable=False,

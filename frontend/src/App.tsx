@@ -27,6 +27,7 @@ import GuidaPage from './pages/GuidaPage'
 import SiteMapPage from './pages/SiteMapPage'
 import UpdatePage from './pages/UpdatePage'
 import IntegrationsPage from './pages/IntegrationsPage'
+import SiteNetworkMapPage from './pages/SiteNetworkMapPage'
 
 const App: React.FC = () => {
   return (
@@ -36,6 +37,7 @@ const App: React.FC = () => {
         <Route index element={<DashboardPage />} />
         <Route path="sedi" element={<SitesPage />} />
         <Route path="sedi/:id/mappa" element={<SiteMapPage />} />
+        <Route path="sedi/:id/rete" element={<SiteNetworkMapPage />} />
         <Route path="armadi" element={<CabinetsPage />} />
         <Route path="armadi/:id" element={<RackDetailPage />} />
         <Route path="dispositivi" element={<DevicesPage />} />

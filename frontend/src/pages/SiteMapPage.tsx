@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Upload, Trash2, MapPin, Save, Server } from 'lucide-react'
+import { ArrowLeft, Upload, Trash2, MapPin, Save, Server, Network } from 'lucide-react'
 import { sitesApi } from '../api/sites'
 import { cabinetsApi } from '../api/cabinets'
 import { useAuthStore } from '../store/authStore'
@@ -192,6 +192,13 @@ const SiteMapPage: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to={`/sedi/${siteId}/rete`}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Network size={15} />
+            Diagramma di rete
+          </Link>
           {dirty && (
             <button
               onClick={handleSavePositions}

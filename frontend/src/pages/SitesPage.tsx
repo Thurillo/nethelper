@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { Plus, Map } from 'lucide-react'
+import { Plus, Map, Network } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sitesApi } from '../api/sites'
 import { useAuthStore } from '../store/authStore'
@@ -75,16 +75,27 @@ const SitesPage: React.FC = () => {
     key: 'map_action',
     header: '',
     render: (s) => (
-      <Link
-        to={`/sedi/${s.id}/mappa`}
-        onClick={(e) => e.stopPropagation()}
-        className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary-600 transition-colors"
-        title="Planimetria"
-      >
-        <Map size={13} />
-        {s.has_floor_plan ? 'Mappa' : 'Mappa'}
-        {s.has_floor_plan && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />}
-      </Link>
+      <div className="flex items-center gap-3">
+        <Link
+          to={`/sedi/${s.id}/mappa`}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary-600 transition-colors"
+          title="Planimetria"
+        >
+          <Map size={13} />
+          Mappa
+          {s.has_floor_plan && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />}
+        </Link>
+        <Link
+          to={`/sedi/${s.id}/rete`}
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary-600 transition-colors"
+          title="Diagramma di rete"
+        >
+          <Network size={13} />
+          Rete
+        </Link>
+      </div>
     ),
   })
 

@@ -74,6 +74,8 @@ class DeviceUpdate(BaseModel):
     notes: Optional[str] = None
     is_unmanaged_suspected: Optional[bool] = None
     checkmk_host_name: Optional[str] = None
+    plan_x: Optional[float] = None
+    plan_y: Optional[float] = None
 
     @field_validator('mac_address', mode='before')
     @classmethod
@@ -113,6 +115,8 @@ class DeviceRead(BaseModel):
     last_seen: Optional[datetime] = None
     is_unmanaged_suspected: bool
     checkmk_host_name: Optional[str] = None
+    plan_x: Optional[float] = None
+    plan_y: Optional[float] = None
     created_at: datetime
     updated_at: datetime
     cabinet_name: Optional[str] = None

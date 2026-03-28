@@ -598,6 +598,60 @@ systemctl restart nethelper-api nethelper-worker nethelper-beat`}</CodeBlock>
       </>
     ),
   },
+  {
+    id: 'network-diagram',
+    icon: <Network size={18} />,
+    title: 'Diagramma di rete interattivo',
+    content: (
+      <>
+        <p>Ogni sede dispone di un diagramma di rete interattivo che sovrappone i dispositivi e le connessioni fisiche (cavi) alla planimetria dell'edificio.</p>
+
+        <p className="font-medium mt-3">Come aprire il diagramma:</p>
+        <ul>
+          <li>Vai su <strong>Sedi</strong> → nella riga di una sede clicca <strong>Rete</strong></li>
+          <li>Oppure da <strong>Sedi → Mappa</strong>, clicca il pulsante <strong>Diagramma di rete</strong> in alto a destra</li>
+        </ul>
+
+        <p className="font-medium mt-3">Posizionare i dispositivi sul canvas (solo Admin):</p>
+        <ul>
+          <li>I dispositivi non ancora posizionati appaiono nella colonna <strong>"Non posizionati"</strong> a sinistra, raggruppati per tipo</li>
+          <li><strong>Trascina</strong> un dispositivo dalla lista sul canvas per posizionarlo</li>
+          <li>Puoi spostare i dispositivi già posizionati trascinandoli direttamente sul canvas</li>
+          <li>Puoi spostare anche i nodi armadio; la posizione si sincronizza con la Mappa sito</li>
+          <li>Le posizioni vengono salvate automaticamente 1,5 secondi dopo l'ultimo spostamento, oppure manualmente con il pulsante <strong>Salva posizioni</strong></li>
+        </ul>
+
+        <p className="font-medium mt-3">Filtri per tipo di dispositivo:</p>
+        <ul>
+          <li>Usa i checkbox nella colonna sinistra per mostrare/nascondere categorie: Switch, Router, Stampanti, Telecamere, Telefoni, ecc.</li>
+          <li>I cavi collegati a dispositivi nascosti scompaiono automaticamente</li>
+          <li>Usa <strong>Tutti</strong> / <strong>Nessuno</strong> per selezionare/deselezionare tutte le categorie</li>
+        </ul>
+
+        <p className="font-medium mt-3">Armadi collassabili:</p>
+        <ul>
+          <li>Clicca il nome dell'armadio nel canvas per collassarlo — i dispositivi al suo interno vengono nascosti</li>
+          <li>Clicca di nuovo per espanderlo</li>
+        </ul>
+
+        <p className="font-medium mt-3">Vista:</p>
+        <ul>
+          <li><strong>Planimetria</strong> — mostra la planimetria del sito come sfondo (richiede che sia stata caricata dalla Mappa)</li>
+          <li><strong>Schema puro</strong> — canvas vuoto con griglia, usa le stesse posizioni salvate</li>
+        </ul>
+
+        <p className="font-medium mt-3">Navigazione nel canvas:</p>
+        <ul>
+          <li>Zoom: rotellina del mouse o i pulsanti ± in basso a destra</li>
+          <li>Pan: trascina il canvas da un'area vuota</li>
+          <li>Minimap: riquadro in basso a destra per orientarsi su grandi diagrammi</li>
+          <li>Clicca un nodo dispositivo per vedere il dettaglio nel pannello in basso a sinistra, con link diretto al dispositivo</li>
+        </ul>
+
+        <p className="text-gray-500 text-sm mt-3">Le connessioni (cavi) vengono lette automaticamente dai dati esistenti — non è necessario ridisegnarle. I badge CheckMK (UP/DOWN) sono visibili sui nodi se l'integrazione è configurata.</p>
+      </>
+    ),
+  },
 ]
 
 const GuidaPage: React.FC = () => {
