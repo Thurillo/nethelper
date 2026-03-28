@@ -565,6 +565,7 @@ export interface TopologyNode {
   device_id: number   // alias for id
   device_type: DeviceType
   primary_ip: string | null
+  mac_address: string | null
   cabinet_id: number | null
   cabinet_name: string | null
   site_id: number | null
@@ -589,6 +590,42 @@ export interface TopologyEdge {
 export interface TopologyGraph {
   nodes: TopologyNode[]
   edges: TopologyEdge[]
+}
+
+// ============================================================
+// TOPOLOGY MAP
+
+export interface TopologyMapNodeLayout {
+  x: number
+  y: number
+  visible: boolean
+}
+
+export interface TopologyMapList {
+  id: number
+  name: string
+  site_id: number | null
+  created_by_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface TopologyMapRead extends TopologyMapList {
+  layout: Record<string, TopologyMapNodeLayout>
+}
+
+export interface TopologyMapCreate {
+  name: string
+  site_id?: number | null
+}
+
+export interface TopologyMapUpdate {
+  name?: string
+  site_id?: number | null
+}
+
+export interface TopologyMapLayoutPatch {
+  layout: Record<string, TopologyMapNodeLayout>
 }
 
 // ============================================================

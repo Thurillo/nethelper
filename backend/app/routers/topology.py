@@ -1,17 +1,26 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional
+import json
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, require_admin
 from app.models.cable import Cable
 from app.models.device import Device
 from app.models.interface import Interface
+from app.models.topology_map import TopologyMap
 from app.schemas.topology import TopologyEdge, TopologyGraph, TopologyNode
+from app.schemas.topology_map import (
+    TopologyMapCreate,
+    TopologyMapLayoutPatch,
+    TopologyMapList,
+    TopologyMapRead,
+    TopologyMapUpdate,
+)
 
 router = APIRouter(prefix="/topology", tags=["topology"])
 
@@ -41,6 +50,7 @@ async def get_topology(
             name=d.name,
             device_type=d.device_type.value,
             primary_ip=d.primary_ip,
+            mac_address=d.mac_address,
             site_id=d.site_id,
             cabinet_id=d.cabinet_id,
             status=d.status.value,
@@ -173,6 +183,7 @@ async def get_device_neighbors(
             name=d.name,
             device_type=d.device_type.value,
             primary_ip=d.primary_ip,
+            mac_address=d.mac_address,
             site_id=d.site_id,
             cabinet_id=d.cabinet_id,
             status=d.status.value,
@@ -202,3 +213,111 @@ async def get_device_neighbors(
         )
 
     return TopologyGraph(nodes=nodes, edges=edges)
+
+
+# ─── Topology Map endpoints ────────────────────────────────────────────────────
+
+def _map_to_read(tmap: TopologyMap) -> TopologyMapRead:
+    """Convert ORM TopologyMap to TopologyMapRead schema."""
+    return TopologyMapRead.model_validate(tmap)
+
+
+@router.get("/maps/", response_model=List[TopologyMapList])
+async def list_topology_maps(
+    _: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    site_id: Optional[int] = None,
+) -> List[TopologyMapList]:
+    stmt = select(TopologyMap).order_by(TopologyMap.name)
+    if site_id is not None:
+        stmt = stmt.where(TopologyMap.site_id == site_id)
+    result = await db.execute(stmt)
+    maps = result.scalars().all()
+    return [TopologyMapList.model_validate(m) for m in maps]
+
+
+@router.post("/maps/", response_model=TopologyMapRead, status_code=status.HTTP_201_CREATED)
+async def create_topology_map(
+    body: TopologyMapCreate,
+    current_user: Annotated[object, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TopologyMapRead:
+    tmap = TopologyMap(
+        name=body.name,
+        site_id=body.site_id,
+        created_by_id=current_user.id,
+        layout=None,
+    )
+    db.add(tmap)
+    await db.flush()
+    await db.refresh(tmap)
+    return _map_to_read(tmap)
+
+
+@router.get("/maps/{map_id}", response_model=TopologyMapRead)
+async def get_topology_map(
+    map_id: int,
+    _: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TopologyMapRead:
+    result = await db.execute(select(TopologyMap).where(TopologyMap.id == map_id))
+    tmap = result.scalar_one_or_none()
+    if tmap is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topology map not found.")
+    return _map_to_read(tmap)
+
+
+@router.put("/maps/{map_id}", response_model=TopologyMapRead)
+async def update_topology_map(
+    map_id: int,
+    body: TopologyMapUpdate,
+    _: Annotated[object, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TopologyMapRead:
+    result = await db.execute(select(TopologyMap).where(TopologyMap.id == map_id))
+    tmap = result.scalar_one_or_none()
+    if tmap is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topology map not found.")
+    if body.name is not None:
+        tmap.name = body.name
+    if body.site_id is not None:
+        tmap.site_id = body.site_id
+    elif "site_id" in body.model_fields_set:
+        tmap.site_id = None
+    db.add(tmap)
+    await db.flush()
+    await db.refresh(tmap)
+    return _map_to_read(tmap)
+
+
+@router.patch("/maps/{map_id}/layout", response_model=TopologyMapRead)
+async def patch_topology_map_layout(
+    map_id: int,
+    body: TopologyMapLayoutPatch,
+    _: Annotated[object, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> TopologyMapRead:
+    result = await db.execute(select(TopologyMap).where(TopologyMap.id == map_id))
+    tmap = result.scalar_one_or_none()
+    if tmap is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topology map not found.")
+    layout_dict = {k: v.model_dump() for k, v in body.layout.items()}
+    tmap.layout = json.dumps(layout_dict)
+    db.add(tmap)
+    await db.flush()
+    await db.refresh(tmap)
+    return _map_to_read(tmap)
+
+
+@router.delete("/maps/{map_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_topology_map(
+    map_id: int,
+    _: Annotated[object, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    result = await db.execute(select(TopologyMap).where(TopologyMap.id == map_id))
+    tmap = result.scalar_one_or_none()
+    if tmap is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Topology map not found.")
+    await db.delete(tmap)
+    await db.flush()

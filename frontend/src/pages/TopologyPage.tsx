@@ -1,131 +1,633 @@
-import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useTopology } from '../hooks/useTopology'
-import { useQuery } from '@tanstack/react-query'
-import { sitesApi } from '../api/sites'
-import TopologyGraph from '../components/topology/TopologyGraph'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  ReactFlowProvider,
+  useNodesState,
+  useEdgesState,
+  MarkerType,
+  type Node,
+  type Edge,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import {
+  GitBranch, Save, Search, X, Trash2, Plus, Eye, EyeOff,
+} from 'lucide-react'
+import { topologyApi, topologyMapsApi } from '../api/topology'
+import { checkmkApi } from '../api/checkmk'
+import { useAuthStore } from '../store/authStore'
+import TopologyGraph, { DEVICE_COLORS } from '../components/topology/TopologyGraph'
 import { DeviceTypeBadge, DeviceStatusBadge } from '../components/common/Badge'
-import type { DeviceType, TopologyNode } from '../types'
+import CheckMKBadge from '../components/common/CheckMKBadge'
+import type {
+  TopologyNode,
+  TopologyMapNodeLayout,
+  DeviceType,
+  CheckMKStatus,
+} from '../types'
 
-const DEVICE_TYPES: DeviceType[] = ['switch', 'router', 'access_point', 'server', 'firewall']
+// ─── Type order for auto-layout ───────────────────────────────────────────────
+
+const TYPE_ORDER: DeviceType[] = [
+  'switch', 'router', 'firewall', 'server', 'access_point',
+  'patch_panel', 'pdu', 'ups', 'unmanaged_switch',
+  'workstation', 'printer', 'camera', 'phone', 'other',
+]
+
+//─── Auto-layout: grid grouped by device type ─────────────────────────────────
+
+function computeAutoLayout(nodes: TopologyNode[]): Record<string, TopologyMapNodeLayout> {
+  const groups: Record<string, TopologyNode[]> = {}
+  nodes.forEach((n) => {
+    const k = n.device_type
+    if (!groups[k]) groups[k] = []
+    groups[k].push(n)
+  })
+
+  const COLS = 6
+  const NODE_W = 170
+  const NODE_H = 80
+  const COL_GAP = 16
+  const ROW_GAP = 16
+  const GROUP_GAP = 48
+  const PADDING = 50
+
+  const layout: Record<string, TopologyMapNodeLayout> = {}
+  let groupY = PADDING
+
+  TYPE_ORDER.forEach((type) => {
+    const group = groups[type]
+    if (!group || group.length === 0) return
+    group.forEach((node, idx) => {
+      const col = idx % COLS
+      const row = Math.floor(idx / COLS)
+      layout[String(node.id)] = {
+        x: PADDING + col * (NODE_W + COL_GAP),
+        y: groupY + row * (NODE_H + ROW_GAP),
+        visible: true,
+      }
+    })
+    const rows = Math.ceil(group.length / COLS)
+    groupY += rows * (NODE_H + ROW_GAP) + GROUP_GAP
+  })
+
+  // Any remaining types not in TYPE_ORDER
+  Object.entries(groups).forEach(([type, group]) => {
+    if (TYPE_ORDER.includes(type as DeviceType)) return
+    group.forEach((node, idx) => {
+      const col = idx % COLS
+      const row = Math.floor(idx / COLS)
+      layout[String(node.id)] = {
+        x: PADDING + col * (NODE_W + COL_GAP),
+        y: groupY + row * (NODE_H + ROW_GAP),
+        visible: true,
+      }
+    })
+    const rows = Math.ceil(group.length / COLS)
+    groupY += rows * (NODE_H + ROW_GAP) + GROUP_GAP
+  })
+
+  return layout
+}
+
+// ─── TopologyPage ─────────────────────────────────────────────────────────────
 
 const TopologyPage: React.FC = () => {
-  const navigate = useNavigate()
-  const [siteFilter, setSiteFilter] = useState<number | undefined>()
-  const [typeFilter, setTypeFilter] = useState<DeviceType | undefined>()
-  const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
+  const queryClient = useQueryClient()
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin')
 
-  const { data: topology, isLoading } = useTopology({ site_id: siteFilter, device_type: typeFilter })
-  const { data: sitesData } = useQuery({
-    queryKey: ['sites', 'all'],
-    queryFn: () => sitesApi.list({ size: 100 }),
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [selectedMapId, setSelectedMapId] = useState<number | null>(null)
+  const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [hasDirty, setHasDirty] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newMapName, setNewMapName] = useState('')
+  const [newMapSiteId, setNewMapSiteId] = useState<number | ''>('')
+  const [isCreating, setIsCreating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  const dirtyLayoutRef = useRef<Record<string, { x: number; y: number; visible: boolean }>>({})
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const autoLayoutRef = useRef<Record<string, TopologyMapNodeLayout> | null>(null)
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
+  const { data: mapList } = useQuery({
+    queryKey: ['topology-maps', null],
+    queryFn: () => topologyMapsApi.list(),
     staleTime: 60_000,
   })
 
-  return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
-      {/* Left filter panel */}
-      <div className="w-56 flex-shrink-0 space-y-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-          <h3 className="text-sm font-semibold text-gray-900">Filtri</h3>
+  const { data: activeMap } = useQuery({
+    queryKey: ['topology-maps', selectedMapId],
+    queryFn: () => topologyMapsApi.get(selectedMapId!),
+    enabled: !!selectedMapId,
+    staleTime: 30_000,
+  })
 
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Sede</label>
-            <select
-              value={siteFilter ?? ''}
-              onChange={(e) => setSiteFilter(e.target.value ? Number(e.target.value) : undefined)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+  const { data: topology } = useQuery({
+    queryKey: ['topology', {}],
+    queryFn: () => topologyApi.getTopology(),
+    staleTime: 60_000,
+  })
+
+  const { data: checkmkStatus } = useQuery({
+    queryKey: ['checkmk', 'status'],
+    queryFn: checkmkApi.getStatus,
+    staleTime: 60_000,
+    retry: false,
+  })
+
+  // ── Save layout ────────────────────────────────────────────────────────────
+  const saveLayout = useCallback(async () => {
+    if (!selectedMapId || Object.keys(dirtyLayoutRef.current).length === 0) return
+    const baseLayout = activeMap?.layout ?? {}
+    const merged: Record<string, TopologyMapNodeLayout> = { ...baseLayout }
+    Object.entries(dirtyLayoutRef.current).forEach(([k, v]) => { merged[k] = v })
+    dirtyLayoutRef.current = {}
+    setHasDirty(false)
+    await topologyMapsApi.patchLayout(selectedMapId, { layout: merged })
+    queryClient.invalidateQueries({ queryKey: ['topology-maps', selectedMapId] })
+  }, [selectedMapId, activeMap, queryClient])
+
+  const scheduleSave = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(saveLayout, 1500)
+  }, [saveLayout])
+
+  // ── Effective layout (persisted or auto) ───────────────────────────────────
+  const effectiveLayout = useMemo((): Record<string, TopologyMapNodeLayout> => {
+    if (!topology) return {}
+    if (activeMap && Object.keys(activeMap.layout).length > 0) {
+      autoLayoutRef.current = null
+      return activeMap.layout
+    }
+    // Compute auto-layout once per map
+    if (!autoLayoutRef.current) {
+      autoLayoutRef.current = computeAutoLayout(topology.nodes)
+    }
+    return autoLayoutRef.current
+  }, [topology, activeMap])
+
+  // When map changes, reset auto-layout cache
+  React.useEffect(() => {
+    autoLayoutRef.current = null
+  }, [selectedMapId])
+
+  // ── Search matching ────────────────────────────────────────────────────────
+  const matchSet = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    if (!q || !topology) return new Set<number>()
+    const set = new Set<number>()
+    const qNorm = q.replace(/[:.]/g, '')
+    topology.nodes.forEach((n) => {
+      const macNorm = (n.mac_address ?? '').toLowerCase().replace(/[:.]/g, '')
+      if (
+        n.name.toLowerCase().includes(q) ||
+        (n.primary_ip ?? '').toLowerCase().includes(q) ||
+        macNorm.includes(qNorm)
+      ) {
+        set.add(n.id)
+      }
+    })
+    return set
+  }, [searchQuery, topology])
+
+  const hasSearch = searchQuery.trim().length > 0
+
+  // ── Build ReactFlow nodes ──────────────────────────────────────────────────
+  const rfNodes = useMemo((): Node[] => {
+    if (!topology || !selectedMapId) return []
+    return topology.nodes.map((n) => {
+      const pos = effectiveLayout[String(n.id)]
+      const layoutEntry = activeMap?.layout?.[String(n.id)]
+      const visible = layoutEntry?.visible ?? (effectiveLayout[String(n.id)]?.visible ?? true)
+      const checkmkEntry = (checkmkStatus as Record<number, { state_label: CheckMKStatus }> | undefined)?.[n.id]
+      return {
+        id: `device:${n.id}`,
+        type: 'topologyDevice',
+        position: pos ? { x: pos.x, y: pos.y } : { x: 0, y: 0 },
+        hidden: !visible,
+        draggable: isAdmin && !!selectedMapId,
+        data: {
+          label: n.name,
+          device_type: n.device_type,
+          primary_ip: n.primary_ip,
+          mac_address: n.mac_address,
+          status: n.status,
+          device_id: n.id,
+          checkmk_status: checkmkEntry?.state_label ?? null,
+          highlighted: hasSearch && matchSet.has(n.id),
+          dimmed: hasSearch && !matchSet.has(n.id),
+          onSelect: setSelectedDeviceId,
+        },
+      }
+    })
+  }, [topology, selectedMapId, effectiveLayout, activeMap, checkmkStatus, hasSearch, matchSet, isAdmin])
+
+  // ── Build ReactFlow edges ──────────────────────────────────────────────────
+  const rfEdges = useMemo((): Edge[] => {
+    if (!topology) return []
+    return topology.edges.map((e) => ({
+      id: `edge:${e.id}`,
+      source: `device:${e.source_device_id}`,
+      target: `device:${e.target_device_id}`,
+      label: `${e.source_interface} ↔ ${e.target_interface}`,
+      type: 'default',
+      style: { stroke: '#6b7280', strokeWidth: 1.5 },
+      markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280', width: 10, height: 10 },
+      labelStyle: { fontSize: 9, fill: '#6b7280' },
+      labelBgStyle: { fill: 'white', fillOpacity: 0.85 },
+      labelBgPadding: [3, 3] as [number, number],
+    }))
+  }, [topology])
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(rfNodes)
+  const [edges, , onEdgesChange] = useEdgesState(rfEdges)
+
+  React.useEffect(() => { setNodes(rfNodes) }, [rfNodes, setNodes])
+
+  // ── Drag stop handler ──────────────────────────────────────────────────────
+  const onNodeDragStop = useCallback(
+    (_e: React.MouseEvent, node: Node) => {
+      if (!isAdmin || !selectedMapId) return
+      const deviceId = node.id.replace('device:', '')
+      const existing = effectiveLayout[deviceId]
+      dirtyLayoutRef.current[deviceId] = {
+        x: node.position.x,
+        y: node.position.y,
+        visible: existing?.visible ?? true,
+      }
+      setHasDirty(true)
+      scheduleSave()
+    },
+    [isAdmin, selectedMapId, effectiveLayout, scheduleSave]
+  )
+
+  // ── Toggle device visibility ───────────────────────────────────────────────
+  const toggleDeviceVisibility = useCallback(
+    (deviceId: number) => {
+      if (!isAdmin || !selectedMapId) return
+      const key = String(deviceId)
+      const currentPos = effectiveLayout[key] ?? { x: 0, y: 0 }
+      const currentVisible = currentPos.visible ?? true
+      dirtyLayoutRef.current[key] = { x: currentPos.x, y: currentPos.y, visible: !currentVisible }
+      setHasDirty(true)
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === `device:${deviceId}` ? { ...n, hidden: currentVisible } : n
+        )
+      )
+      scheduleSave()
+    },
+    [isAdmin, selectedMapId, effectiveLayout, setNodes, scheduleSave]
+  )
+
+  // ── Create map ─────────────────────────────────────────────────────────────
+  const handleCreateMap = useCallback(async () => {
+    if (!newMapName.trim()) return
+    setIsCreating(true)
+    try {
+      const created = await topologyMapsApi.create({
+        name: newMapName.trim(),
+        site_id: newMapSiteId !== '' ? Number(newMapSiteId) : null,
+      })
+      queryClient.invalidateQueries({ queryKey: ['topology-maps', null] })
+      setSelectedMapId(created.id)
+      setShowCreateModal(false)
+      setNewMapName('')
+      setNewMapSiteId('')
+    } finally {
+      setIsCreating(false)
+    }
+  }, [newMapName, newMapSiteId, queryClient])
+
+  // ── Delete map ─────────────────────────────────────────────────────────────
+  const handleDeleteMap = useCallback(async () => {
+    if (!selectedMapId) return
+    if (!window.confirm('Eliminare questa mappa? L\'operazione non può essere annullata.')) return
+    setIsDeleting(true)
+    try {
+      await topologyMapsApi.delete(selectedMapId)
+      queryClient.invalidateQueries({ queryKey: ['topology-maps', null] })
+      setSelectedMapId(null)
+      dirtyLayoutRef.current = {}
+      setHasDirty(false)
+    } finally {
+      setIsDeleting(false)
+    }
+  }, [selectedMapId, queryClient])
+
+  // ── Selected node info ─────────────────────────────────────────────────────
+  const selectedNode = useMemo(
+    () => topology?.nodes.find((n) => n.id === selectedDeviceId) ?? null,
+    [topology, selectedDeviceId]
+  )
+  const checkmkEntry = selectedDeviceId
+    ? (checkmkStatus as Record<number, { state_label: CheckMKStatus; host_name: string; address: string }> | undefined)?.[selectedDeviceId]
+    : null
+
+  // ── Visibility map for sidebar ─────────────────────────────────────────────
+  const visibilityMap = useMemo(() => {
+    const map: Record<number, boolean> = {}
+    topology?.nodes.forEach((n) => {
+      const key = String(n.id)
+      if (nodes.find((nd) => nd.id === `device:${n.id}`)) {
+        map[n.id] = !(nodes.find((nd) => nd.id === `device:${n.id}`)?.hidden ?? false)
+      } else {
+        map[n.id] = effectiveLayout[key]?.visible ?? true
+      }
+    })
+    return map
+  }, [topology, nodes, effectiveLayout])
+
+  // ─────────────────────────────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 bg-white flex-shrink-0 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <GitBranch size={18} className="text-primary-500 flex-shrink-0" />
+          <span className="text-sm font-semibold text-gray-700 flex-shrink-0">Topologia</span>
+          <span className="text-gray-300">/</span>
+
+          {/* Map selector */}
+          <select
+            value={selectedMapId ?? ''}
+            onChange={(e) => {
+              dirtyLayoutRef.current = {}
+              setHasDirty(false)
+              setSelectedDeviceId(null)
+              setSelectedMapId(e.target.value ? Number(e.target.value) : null)
+            }}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 min-w-[180px] max-w-[240px]"
+          >
+            <option value="">— Seleziona mappa —</option>
+            {mapList?.map((m) => (
+              <option key={m.id} value={m.id}>{m.name}</option>
+            ))}
+          </select>
+
+          {isAdmin && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium border border-dashed border-primary-400 text-primary-600 rounded-lg hover:bg-primary-50 transition-colors"
             >
-              <option value="">Tutte le sedi</option>
-              {sitesData?.items.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
+              <Plus size={13} />
+              Nuova mappa
+            </button>
+          )}
+
+          {isAdmin && selectedMapId && (
+            <button
+              onClick={handleDeleteMap}
+              disabled={isDeleting}
+              className="flex items-center gap-1 px-2 py-1.5 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+              title="Elimina mappa"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+
+        {hasDirty && isAdmin && (
+          <button
+            onClick={saveLayout}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 text-white text-sm rounded-lg hover:bg-primary-700 transition-colors flex-shrink-0"
+          >
+            <Save size={14} />
+            Salva
+          </button>
+        )}
+      </div>
+
+      {/* ── Body ── */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* Left sidebar */}
+        <div className="w-60 flex-shrink-0 border-r border-gray-200 bg-white flex flex-col overflow-hidden">
+
+          {/* Search */}
+          <div className="p-3 border-b border-gray-100">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Nome, IP, MAC…"
+                className="w-full pl-7 pr-7 py-1.5 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            {hasSearch && (
+              <p className="text-[10px] text-gray-500 mt-1">
+                {matchSet.size} trovati su {topology?.nodes.length ?? 0}
+              </p>
+            )}
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Tipo dispositivo</label>
-            <select
-              value={typeFilter ?? ''}
-              onChange={(e) => setTypeFilter(e.target.value as DeviceType || undefined)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">Tutti i tipi</option>
-              {DEVICE_TYPES.map((t) => (
-                <option key={t} value={t}>{t.replace('_', ' ')}</option>
-              ))}
-            </select>
+          {/* Device list */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {!topology ? (
+              <p className="text-xs text-gray-400 text-center py-4">Caricamento…</p>
+            ) : (
+              <>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                  Dispositivi ({topology.nodes.length})
+                </div>
+                {topology.nodes.map((n) => {
+                  const c = DEVICE_COLORS[n.device_type] ?? DEVICE_COLORS.other
+                  const visible = visibilityMap[n.id] ?? true
+                  const isMatch = hasSearch && matchSet.has(n.id)
+                  const isSelected = selectedDeviceId === n.id
+                  return (
+                    <div
+                      key={n.id}
+                      className={[
+                        'flex items-center gap-1.5 px-1.5 py-1 rounded text-xs mb-0.5 transition-colors',
+                        isMatch ? 'bg-yellow-50 border border-yellow-200' : '',
+                        isSelected ? 'bg-primary-50' : 'hover:bg-gray-50',
+                        !visible ? 'opacity-40' : '',
+                      ].filter(Boolean).join(' ')}
+                    >
+                      {isAdmin && selectedMapId ? (
+                        <button
+                          onClick={() => toggleDeviceVisibility(n.id)}
+                          className="flex-shrink-0 text-gray-400 hover:text-gray-700"
+                          title={visible ? 'Nascondi' : 'Mostra'}
+                        >
+                          {visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                        </button>
+                      ) : (
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.dot}`} />
+                      )}
+                      <span
+                        className="truncate cursor-pointer hover:text-primary-600 flex-1"
+                        onClick={() => setSelectedDeviceId(isSelected ? null : n.id)}
+                        title={n.name}
+                      >
+                        {n.name}
+                      </span>
+                    </div>
+                  )
+                })}
+              </>
+            )}
           </div>
         </div>
 
-        {topology && (
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">Statistiche</h3>
-            <div className="space-y-1 text-sm text-gray-600">
-              <p>{topology.nodes.length} dispositivi</p>
-              <p>{topology.edges.length} collegamenti</p>
+        {/* Canvas */}
+        <ReactFlowProvider>
+          {!selectedMapId ? (
+            <div className="flex-1 flex items-center justify-center flex-col gap-3 text-gray-400 bg-gray-50">
+              <GitBranch size={48} className="opacity-20" />
+              <p className="text-sm">Seleziona una mappa dal menu in alto</p>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  <Plus size={14} />
+                  Crea prima mappa
+                </button>
+              )}
+            </div>
+          ) : (
+            <TopologyGraph
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onNodeDragStop={onNodeDragStop}
+              isDraggable={isAdmin && !!selectedMapId}
+            />
+          )}
+        </ReactFlowProvider>
+
+        {/* Right detail panel */}
+        {selectedNode && (
+          <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+            <div className="p-4">
+              {/* Header */}
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="font-semibold text-gray-900 text-sm leading-tight pr-2">{selectedNode.name}</h3>
+                <button
+                  onClick={() => setSelectedDeviceId(null)}
+                  className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Badges */}
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                <DeviceTypeBadge type={selectedNode.device_type} />
+                <DeviceStatusBadge status={selectedNode.status as 'active' | 'planned' | 'inactive' | 'decommissioned'} />
+                {checkmkEntry && <CheckMKBadge status={checkmkEntry.state_label} />}
+              </div>
+
+              {/* Details */}
+              <div className="space-y-2 text-sm">
+                {selectedNode.primary_ip && (
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide">IP primario</p>
+                    <p className="font-mono text-gray-800">{selectedNode.primary_ip}</p>
+                  </div>
+                )}
+                {selectedNode.mac_address && (
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide">MAC</p>
+                    <p className="font-mono text-gray-800 text-xs">{selectedNode.mac_address}</p>
+                  </div>
+                )}
+                {selectedNode.cabinet_name && (
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide">Armadio</p>
+                    <p className="text-gray-800">{selectedNode.cabinet_name}</p>
+                  </div>
+                )}
+                {selectedNode.site_name && (
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase tracking-wide">Sede</p>
+                    <p className="text-gray-800">{selectedNode.site_name}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* CheckMK detail */}
+              {checkmkEntry && (
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">CheckMK</p>
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckMKBadge status={checkmkEntry.state_label} />
+                    <span className="text-xs text-gray-700 font-medium">{checkmkEntry.host_name}</span>
+                  </div>
+                  {checkmkEntry.address && (
+                    <p className="text-xs text-gray-500 font-mono">{checkmkEntry.address}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Navigate */}
+              <Link
+                to={`/dispositivi/${selectedNode.id}`}
+                className="mt-4 block w-full text-center px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                Vai al dispositivo →
+              </Link>
             </div>
           </div>
         )}
       </div>
 
-      {/* Topology graph */}
-      <div className="flex-1 min-w-0">
-        <TopologyGraph
-          data={topology}
-          isLoading={isLoading}
-          onNodeClick={setSelectedNode}
-        />
-      </div>
-
-      {/* Right detail panel */}
-      {selectedNode && (
-        <div className="w-64 flex-shrink-0">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
-            <div className="flex items-start justify-between">
-              <h3 className="font-semibold text-gray-900 text-sm">{selectedNode.label}</h3>
-              <button
-                onClick={() => setSelectedNode(null)}
-                className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-              >
-                ×
+      {/* Create map modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-gray-900">Nuova mappa topologica</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
               </button>
             </div>
-
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <DeviceTypeBadge type={selectedNode.device_type} />
-                <DeviceStatusBadge status={selectedNode.status} />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Nome mappa *</label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={newMapName}
+                  onChange={(e) => setNewMapName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateMap()}
+                  placeholder="Es. Sede Principale, Piano 1°…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
               </div>
-
-              {selectedNode.primary_ip && (
-                <div>
-                  <p className="text-xs text-gray-500">IP</p>
-                  <p className="text-sm font-mono">{selectedNode.primary_ip}</p>
-                </div>
-              )}
-
-              {selectedNode.cabinet_name && (
-                <div>
-                  <p className="text-xs text-gray-500">Armadio</p>
-                  <p className="text-sm">{selectedNode.cabinet_name}</p>
-                </div>
-              )}
-
-              {selectedNode.site_name && (
-                <div>
-                  <p className="text-xs text-gray-500">Sede</p>
-                  <p className="text-sm">{selectedNode.site_name}</p>
-                </div>
-              )}
             </div>
-
-            <button
-              onClick={() => navigate(`/dispositivi/${selectedNode.id}`)}
-              className="w-full px-3 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700"
-            >
-              Vai al dispositivo
-            </button>
+            <div className="flex gap-2 mt-5">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={handleCreateMap}
+                disabled={!newMapName.trim() || isCreating}
+                className="flex-1 px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreating ? 'Creazione…' : 'Crea'}
+              </button>
+            </div>
           </div>
         </div>
       )}

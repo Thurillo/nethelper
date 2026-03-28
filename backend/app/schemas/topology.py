@@ -12,6 +12,7 @@ class TopologyNode(BaseModel):
     device_id: int = 0       # alias for id — used by frontend
     device_type: str
     primary_ip: Optional[str] = None
+    mac_address: Optional[str] = None
     site_id: Optional[int] = None
     cabinet_id: Optional[int] = None
     cabinet_name: Optional[str] = None
