@@ -104,6 +104,7 @@ const TopologyPage: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newMapName, setNewMapName] = useState('')
   const [newMapSiteId, setNewMapSiteId] = useState<number | ''>('')
+  const [newMapBgUrl, setNewMapBgUrl] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -291,12 +292,14 @@ const TopologyPage: React.FC = () => {
       const created = await topologyMapsApi.create({
         name: newMapName.trim(),
         site_id: newMapSiteId !== '' ? Number(newMapSiteId) : null,
+        background_image_url: newMapBgUrl.trim() || null,
       })
       queryClient.invalidateQueries({ queryKey: ['topology-maps', null] })
       setSelectedMapId(created.id)
       setShowCreateModal(false)
       setNewMapName('')
       setNewMapSiteId('')
+      setNewMapBgUrl('')
     } finally {
       setIsCreating(false)
     }
@@ -509,6 +512,7 @@ const TopologyPage: React.FC = () => {
               onEdgesChange={onEdgesChange}
               onNodeDragStop={onNodeDragStop}
               isDraggable={isAdmin && !!selectedMapId}
+              backgroundImageUrl={activeMap?.background_image_url}
             />
           )}
         </ReactFlowProvider>
@@ -609,6 +613,16 @@ const TopologyPage: React.FC = () => {
                   onChange={(e) => setNewMapName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateMap()}
                   placeholder="Es. Sede Principale, Piano 1°…"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">URL immagine di sfondo (opzionale)</label>
+                <input
+                  type="url"
+                  value={newMapBgUrl}
+                  onChange={(e) => setNewMapBgUrl(e.target.value)}
+                  placeholder="https://esempio.com/planimetria.jpg"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
               </div>

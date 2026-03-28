@@ -16,11 +16,13 @@ class TopologyMapNodeLayout(BaseModel):
 class TopologyMapCreate(BaseModel):
     name: str
     site_id: Optional[int] = None
+    background_image_url: Optional[str] = None
 
 
 class TopologyMapUpdate(BaseModel):
     name: Optional[str] = None
     site_id: Optional[int] = None
+    background_image_url: Optional[str] = None
 
 
 class TopologyMapLayoutPatch(BaseModel):
@@ -32,6 +34,7 @@ class TopologyMapList(BaseModel):
     name: str
     site_id: Optional[int] = None
     created_by_id: Optional[int] = None
+    background_image_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -43,6 +46,7 @@ class TopologyMapRead(BaseModel):
     name: str
     site_id: Optional[int] = None
     created_by_id: Optional[int] = None
+    background_image_url: Optional[str] = None
     layout: dict[str, TopologyMapNodeLayout] = {}
     created_at: datetime
     updated_at: datetime
@@ -67,6 +71,7 @@ class TopologyMapRead(BaseModel):
                     "name": data.name,
                     "site_id": data.site_id,
                     "created_by_id": data.created_by_id,
+                    "background_image_url": getattr(data, "background_image_url", None),
                     "layout": parsed,
                     "created_at": data.created_at,
                     "updated_at": data.updated_at,
@@ -77,6 +82,7 @@ class TopologyMapRead(BaseModel):
                     "name": data.name,
                     "site_id": data.site_id,
                     "created_by_id": data.created_by_id,
+                    "background_image_url": getattr(data, "background_image_url", None),
                     "layout": {},
                     "created_at": data.created_at,
                     "updated_at": data.updated_at,

@@ -84,6 +84,33 @@ export const nodeTypes: NodeTypes = {
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+// ─── Background image node ─────────────────────────────────────────────────────
+
+interface BgImageNodeData extends Record<string, unknown> {
+  url: string
+  width: number
+  height: number
+}
+
+const BgImageNode = memo(({ data }: { data: BgImageNodeData }) => (
+  <img
+    src={data.url}
+    width={data.width}
+    height={data.height}
+    draggable={false}
+    style={{ display: 'block', borderRadius: 8, opacity: 0.55, userSelect: 'none', pointerEvents: 'none' }}
+    alt="floor plan"
+  />
+))
+BgImageNode.displayName = 'BgImageNode'
+
+const nodeTypesWithBg: NodeTypes = {
+  topologyDevice: TopologyDeviceNode as unknown as NodeTypes['topologyDevice'],
+  bgImage: BgImageNode as unknown as NodeTypes['bgImage'],
+}
+
+// ─── Main component ────────────────────────────────────────────────────────────
+
 interface TopologyGraphProps {
   nodes: Node[]
   edges: Edge[]
@@ -91,7 +118,11 @@ interface TopologyGraphProps {
   onEdgesChange: OnEdgesChange
   onNodeDragStop?: (e: React.MouseEvent, node: Node) => void
   isDraggable?: boolean
+  backgroundImageUrl?: string | null
 }
+
+const BG_W = 1600
+const BG_H = 1000
 
 const TopologyGraph: React.FC<TopologyGraphProps> = ({
   nodes,
@@ -100,6 +131,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
   onEdgesChange,
   onNodeDragStop,
   isDraggable = false,
+  backgroundImageUrl,
 }) => {
   const handleNodeDragStop = useCallback(
     (e: React.MouseEvent, node: Node) => {
@@ -108,15 +140,32 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
     [onNodeDragStop]
   )
 
+  // Prepend a non-interactive background image node when URL is set
+  const allNodes = backgroundImageUrl
+    ? [
+        {
+          id: '__bg__',
+          type: 'bgImage',
+          position: { x: 0, y: 0 },
+          draggable: false,
+          selectable: false,
+          focusable: false,
+          zIndex: -1,
+          data: { url: backgroundImageUrl, width: BG_W, height: BG_H } as BgImageNodeData,
+        } as Node,
+        ...nodes,
+      ]
+    : nodes
+
   return (
     <div className="flex-1 min-w-0 h-full">
       <ReactFlow
-        nodes={nodes}
+        nodes={allNodes}
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeDragStop={handleNodeDragStop}
-        nodeTypes={nodeTypes}
+        nodeTypes={nodeTypesWithBg}
         nodesDraggable={isDraggable}
         fitView
         fitViewOptions={{ padding: 0.15 }}

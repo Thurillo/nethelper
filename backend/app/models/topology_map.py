@@ -32,6 +32,7 @@ class TopologyMap(Base):
     # JSON text: {"<device_id>": {"x": 450.5, "y": 230.0, "visible": true}, ...}
     # Using Text instead of JSON column for SQLite + PostgreSQL compatibility
     layout: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
+    background_image_url: Mapped[Optional[str]] = mapped_column(sa.String(500), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),

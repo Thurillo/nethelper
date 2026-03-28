@@ -606,6 +606,7 @@ export interface TopologyMapList {
   name: string
   site_id: number | null
   created_by_id: number | null
+  background_image_url: string | null
   created_at: string
   updated_at: string
 }
@@ -617,11 +618,13 @@ export interface TopologyMapRead extends TopologyMapList {
 export interface TopologyMapCreate {
   name: string
   site_id?: number | null
+  background_image_url?: string | null
 }
 
 export interface TopologyMapUpdate {
   name?: string
   site_id?: number | null
+  background_image_url?: string | null
 }
 
 export interface TopologyMapLayoutPatch {
