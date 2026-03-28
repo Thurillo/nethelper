@@ -150,7 +150,7 @@ const TopologyPage: React.FC = () => {
   // ── Effective layout (persisted or auto) ───────────────────────────────────
   const effectiveLayout = useMemo((): Record<string, TopologyMapNodeLayout> => {
     if (!topology) return {}
-    if (activeMap && Object.keys(activeMap.layout).length > 0) {
+    if (activeMap && activeMap.layout && Object.keys(activeMap.layout).length > 0) {
       autoLayoutRef.current = null
       return activeMap.layout
     }
@@ -285,7 +285,7 @@ const TopologyPage: React.FC = () => {
         site_id: newMapSiteId !== '' ? Number(newMapSiteId) : null,
         background_image_url: newMapBgUrl.trim() || null,
       })
-      queryClient.invalidateQueries({ queryKey: ['topology-maps', null] })
+      queryClient.invalidateQueries({ queryKey: ['topology-maps'] })
       setSelectedMapId(created.id)
       setShowCreateModal(false)
       setNewMapName('')
@@ -303,7 +303,7 @@ const TopologyPage: React.FC = () => {
     setIsDeleting(true)
     try {
       await topologyMapsApi.delete(selectedMapId)
-      queryClient.invalidateQueries({ queryKey: ['topology-maps', null] })
+      queryClient.invalidateQueries({ queryKey: ['topology-maps'] })
       setSelectedMapId(null)
       dirtyLayoutRef.current = {}
       setHasDirty(false)
