@@ -241,7 +241,8 @@ const edgeTypesMap: EdgeTypes = {
 }
 
 // ─── AutoFitView: re-fit viewport when container resizes ──────────────────────
-// Suppressed when a node is selected (panel open changes canvas width → don't re-fit)
+// Suppressed when a node is selected. Double-checked both at callback and
+// inside the debounced timeout to handle React batching race conditions.
 
 const AutoFitView: React.FC<{ suppress: boolean }> = ({ suppress }) => {
   const { fitView } = useReactFlow()
@@ -253,7 +254,9 @@ const AutoFitView: React.FC<{ suppress: boolean }> = ({ suppress }) => {
     const observer = new ResizeObserver(() => {
       if (suppressRef.current) return
       clearTimeout(timer)
-      timer = setTimeout(() => fitView({ padding: 0.15, duration: 200 }), 150)
+      timer = setTimeout(() => {
+        if (!suppressRef.current) fitView({ padding: 0.15, duration: 200 })
+      }, 150)
     })
     const el = document.querySelector('.react-flow')
     if (el) observer.observe(el)
@@ -263,24 +266,6 @@ const AutoFitView: React.FC<{ suppress: boolean }> = ({ suppress }) => {
   return null
 }
 
-// ─── CenterOnSelect: pan to selected node without changing zoom ───────────────
-
-const CenterOnSelect: React.FC<{ selectedNodeId: string | null }> = ({ selectedNodeId }) => {
-  const { setCenter, getZoom } = useReactFlow()
-  const node = useInternalNode(selectedNodeId ?? '')
-
-  useEffect(() => {
-    if (!selectedNodeId || !node) return
-    const w = node.measured?.width ?? 140
-    const h = node.measured?.height ?? 40
-    const cx = node.internals.positionAbsolute.x + w / 2
-    const cy = node.internals.positionAbsolute.y + h / 2
-    setCenter(cx, cy, { zoom: getZoom(), duration: 300 })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeId])
-
-  return null
-}
 
 // ─── Export handle ────────────────────────────────────────────────────────────
 
@@ -421,7 +406,6 @@ const TopologyGraph = forwardRef<TopologyGraphHandle, TopologyGraphProps>(({
       >
         <ExportHelper ref={ref} />
         <AutoFitView suppress={selectedNodeId !== null} />
-        <CenterOnSelect selectedNodeId={selectedNodeId} />
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e5e7eb" />
         <Controls showInteractive={false} />
         <MiniMap

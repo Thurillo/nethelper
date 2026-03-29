@@ -1028,6 +1028,9 @@ const TopologyPage: React.FC = () => {
           </div>
         </div>
 
+        {/* Canvas + floating detail panels */}
+        <div className="flex-1 relative overflow-hidden min-w-0">
+
         {/* Canvas */}
         <ReactFlowProvider>
           {!selectedMapId ? (
@@ -1063,9 +1066,9 @@ const TopologyPage: React.FC = () => {
           )}
         </ReactFlowProvider>
 
-        {/* Right detail panel — Device */}
+        {/* Right detail panel — Device (floating overlay, canvas never resizes) */}
         {selectedNode && !selectedCabinetId && (
-          <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+          <div className="absolute right-0 top-0 h-full w-72 bg-white border-l border-gray-200 shadow-xl overflow-y-auto z-10">
             <div className="p-4">
               {/* Header */}
               <div className="flex items-start justify-between mb-3">
@@ -1138,9 +1141,9 @@ const TopologyPage: React.FC = () => {
           </div>
         )}
 
-        {/* Right detail panel — Cabinet */}
+        {/* Right detail panel — Cabinet (floating overlay) */}
         {selectedCabinet && !selectedDeviceId && (
-          <div className="w-72 flex-shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+          <div className="absolute right-0 top-0 h-full w-72 bg-white border-l border-gray-200 shadow-xl overflow-y-auto z-10">
             <div className="p-4">
               {/* Header */}
               <div className="flex items-start justify-between mb-3">
@@ -1185,6 +1188,8 @@ const TopologyPage: React.FC = () => {
             </div>
           </div>
         )}
+
+        </div>{/* end canvas + floating panels wrapper */}
       </div>
 
       {/* Create map modal */}
