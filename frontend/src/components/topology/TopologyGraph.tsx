@@ -12,6 +12,7 @@ import {
   type OnEdgesChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import { LayoutDashboard } from 'lucide-react'
 import CheckMKBadge from '../common/CheckMKBadge'
 import type { CheckMKStatus, DeviceType } from '../../types'
 
@@ -44,8 +45,8 @@ export interface TopologyDeviceNodeData extends Record<string, unknown> {
   status: string
   checkmk_status: CheckMKStatus | null
   device_id: number
-  highlighted: boolean   // search match — bright ring
-  dimmed: boolean        // search active but not matched — low opacity
+  highlighted: boolean
+  dimmed: boolean
   onSelect: (id: number) => void
 }
 
@@ -78,11 +79,43 @@ export const TopologyDeviceNode = memo(({ data, selected }: { data: TopologyDevi
 
 TopologyDeviceNode.displayName = 'TopologyDeviceNode'
 
-export const nodeTypes: NodeTypes = {
-  topologyDevice: TopologyDeviceNode as unknown as NodeTypes['topologyDevice'],
+// ─── Custom cabinet node ───────────────────────────────────────────────────────
+
+export interface TopologyCabinetNodeData extends Record<string, unknown> {
+  label: string
+  cabinet_id: number
+  u_count: number
+  site_name: string | null
+  highlighted: boolean
+  dimmed: boolean
+  onSelect: (id: number) => void
 }
 
-// ─── Main component ────────────────────────────────────────────────────────────
+export const TopologyCabinetNode = memo(({ data, selected }: { data: TopologyCabinetNodeData; selected: boolean }) => {
+  return (
+    <div
+      className={[
+        'rounded-lg border-2 px-3 py-2 text-xs shadow-sm cursor-pointer transition-all',
+        'bg-slate-100 border-slate-500 text-slate-800',
+        selected ? 'ring-2 ring-primary-500 ring-offset-1' : '',
+        data.highlighted ? 'ring-4 ring-yellow-400 ring-offset-1' : '',
+        data.dimmed ? 'opacity-20' : '',
+      ].filter(Boolean).join(' ')}
+      style={{ minWidth: 140, maxWidth: 200 }}
+      onClick={() => data.onSelect(data.cabinet_id)}
+    >
+      <div className="flex items-center gap-1.5 mb-0.5">
+        <LayoutDashboard size={12} className="flex-shrink-0 text-slate-500" />
+        <div className="font-bold truncate">{data.label}</div>
+      </div>
+      <div className="text-[10px] text-slate-500 truncate">
+        {data.u_count}U{data.site_name ? ` — ${data.site_name}` : ''}
+      </div>
+    </div>
+  )
+})
+
+TopologyCabinetNode.displayName = 'TopologyCabinetNode'
 
 // ─── Background image node ─────────────────────────────────────────────────────
 
@@ -106,6 +139,7 @@ BgImageNode.displayName = 'BgImageNode'
 
 const nodeTypesWithBg: NodeTypes = {
   topologyDevice: TopologyDeviceNode as unknown as NodeTypes['topologyDevice'],
+  topologyCabinet: TopologyCabinetNode as unknown as NodeTypes['topologyCabinet'],
   bgImage: BgImageNode as unknown as NodeTypes['bgImage'],
 }
 
@@ -140,7 +174,6 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
     [onNodeDragStop]
   )
 
-  // Prepend a non-interactive background image node when URL is set
   const allNodes = backgroundImageUrl
     ? [
         {
@@ -177,9 +210,9 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
         <Controls showInteractive={false} />
         <MiniMap
           nodeColor={(n) => {
+            if (n.type === 'topologyCabinet') return '#64748b'
             const dt = (n.data as TopologyDeviceNodeData | undefined)?.device_type
             const dot = DEVICE_COLORS[dt ?? 'other']?.dot ?? 'bg-gray-400'
-            // map tailwind class to hex: bg-blue-400 → #60a5fa, etc.
             const colorMap: Record<string, string> = {
               'bg-blue-400': '#60a5fa', 'bg-green-400': '#4ade80', 'bg-purple-400': '#c084fc',
               'bg-orange-400': '#fb923c', 'bg-gray-400': '#9ca3af', 'bg-yellow-400': '#facc15',
