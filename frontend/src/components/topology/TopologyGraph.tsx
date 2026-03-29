@@ -1,10 +1,11 @@
-import React, { memo, useCallback } from 'react'
+import React, { memo, useCallback, useEffect } from 'react'
 import {
   ReactFlow,
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
+  useReactFlow,
   type Node,
   type Edge,
   type NodeTypes,
@@ -128,10 +129,16 @@ interface BgImageNodeData extends Record<string, unknown> {
 const BgImageNode = memo(({ data }: { data: BgImageNodeData }) => (
   <img
     src={data.url}
-    width={data.width}
-    height={data.height}
     draggable={false}
-    style={{ display: 'block', borderRadius: 8, opacity: 0.55, userSelect: 'none', pointerEvents: 'none' }}
+    style={{
+      display: 'block',
+      width: data.width,
+      height: data.height,
+      borderRadius: 8,
+      opacity: 0.55,
+      userSelect: 'none',
+      pointerEvents: 'none',
+    }}
     alt="floor plan"
   />
 ))
@@ -141,6 +148,25 @@ const nodeTypesWithBg: NodeTypes = {
   topologyDevice: TopologyDeviceNode as unknown as NodeTypes['topologyDevice'],
   topologyCabinet: TopologyCabinetNode as unknown as NodeTypes['topologyCabinet'],
   bgImage: BgImageNode as unknown as NodeTypes['bgImage'],
+}
+
+// ─── AutoFitView: re-fit viewport when container resizes ──────────────────────
+
+const AutoFitView: React.FC = () => {
+  const { fitView } = useReactFlow()
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => fitView({ padding: 0.15, duration: 200 }), 150)
+    })
+    const el = document.querySelector('.react-flow')
+    if (el) observer.observe(el)
+    return () => { observer.disconnect(); clearTimeout(timer) }
+  }, [fitView])
+
+  return null
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -206,6 +232,7 @@ const TopologyGraph: React.FC<TopologyGraphProps> = ({
         maxZoom={2}
         deleteKeyCode={null}
       >
+        <AutoFitView />
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#e5e7eb" />
         <Controls showInteractive={false} />
         <MiniMap
