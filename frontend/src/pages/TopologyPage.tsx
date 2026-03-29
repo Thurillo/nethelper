@@ -11,6 +11,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import {
   GitBranch, Save, Search, X, Trash2, Plus, Eye, EyeOff, LayoutDashboard,
+  ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { topologyApi, topologyMapsApi } from '../api/topology'
 import { cabinetsApi } from '../api/cabinets'
@@ -37,6 +38,120 @@ const TYPE_ORDER: DeviceType[] = [
   'patch_panel', 'pdu', 'ups', 'unmanaged_switch',
   'workstation', 'printer', 'camera', 'phone', 'other',
 ]
+
+// ─── Sidebar groups for device list ──────────────────────────────────────────
+
+const DEVICE_TYPE_GROUPS: Array<{ type: string; label: string }> = [
+  { type: 'router',           label: 'Router' },
+  { type: 'firewall',         label: 'Firewall' },
+  { type: 'switch',           label: 'Switch' },
+  { type: 'unmanaged_switch', label: 'Switch non gestiti' },
+  { type: 'patch_panel',      label: 'Patch Panel' },
+  { type: 'access_point',     label: 'Access Point' },
+  { type: 'server',           label: 'Server' },
+  { type: 'workstation',      label: 'Workstation' },
+  { type: 'pdu',              label: 'PDU' },
+  { type: 'ups',              label: 'UPS' },
+  { type: 'printer',          label: 'Stampanti' },
+  { type: 'camera',           label: 'Telecamere' },
+  { type: 'phone',            label: 'Telefoni' },
+  { type: 'other',            label: 'Altro' },
+]
+
+// ─── Edge transitivity: collapse hidden nodes ─────────────────────────────────
+
+type CollapsedEdge = {
+  src: string
+  tgt: string
+  isVirtual: boolean
+  realEdgeId?: number
+  label?: string
+}
+
+function buildCollapsedEdges(
+  topoEdges: Array<{ id: number; source_device_id: number; target_device_id: number; source_interface: string; target_interface: string }>,
+  topoNodes: TopologyNode[],
+  visibilityMap: Record<number, boolean>,
+  cabinetVisibilityMap: Record<number, boolean>,
+): CollapsedEdge[] {
+  // Build undirected adjacency (real edges + implicit device→cabinet)
+  const adj = new Map<string, string[]>()
+  const push = (a: string, b: string) => {
+    adj.set(a, [...(adj.get(a) ?? []), b])
+    adj.set(b, [...(adj.get(b) ?? []), a])
+  }
+
+  for (const e of topoEdges) {
+    push(`device:${e.source_device_id}`, `device:${e.target_device_id}`)
+  }
+  for (const n of topoNodes) {
+    if (n.cabinet_id != null) {
+      push(`device:${n.id}`, `cabinet:${n.cabinet_id}`)
+    }
+  }
+
+  const isVisible = (key: string): boolean => {
+    if (key.startsWith('device:')) return visibilityMap[parseInt(key.slice(7), 10)] ?? true
+    if (key.startsWith('cabinet:')) return cabinetVisibilityMap[parseInt(key.slice(8), 10)] ?? true
+    return true
+  }
+
+  // Map of real edge pair keys for dedup
+  const realPairKeys = new Map<string, { id: number; label: string }>()
+  for (const e of topoEdges) {
+    const key = [`device:${e.source_device_id}`, `device:${e.target_device_id}`].sort().join('|')
+    realPairKeys.set(key, { id: e.id, label: `${e.source_interface} ↔ ${e.target_interface}` })
+  }
+
+  const result: CollapsedEdge[] = []
+
+  // Real edges (both endpoints visible)
+  for (const e of topoEdges) {
+    const s = `device:${e.source_device_id}`, t = `device:${e.target_device_id}`
+    if (isVisible(s) && isVisible(t)) {
+      result.push({ src: s, tgt: t, isVirtual: false, realEdgeId: e.id, label: `${e.source_interface} ↔ ${e.target_interface}` })
+    }
+  }
+
+  // Virtual edges: BFS from each visible node through hidden nodes
+  const seenVirtual = new Set<string>()
+  const allKeys = new Set(adj.keys())
+
+  for (const startKey of allKeys) {
+    if (!isVisible(startKey)) continue
+
+    const visited = new Set<string>([startKey])
+    const queue: string[] = []
+
+    // Seed: hidden direct neighbors of startKey
+    for (const nb of adj.get(startKey) ?? []) {
+      if (!visited.has(nb) && !isVisible(nb)) {
+        visited.add(nb)
+        queue.push(nb)
+      }
+    }
+
+    let head = 0
+    while (head < queue.length) {
+      const cur = queue[head++]
+      for (const nb of adj.get(cur) ?? []) {
+        if (visited.has(nb)) continue
+        visited.add(nb)
+        if (isVisible(nb)) {
+          const pairKey = [startKey, nb].sort().join('|')
+          if (!seenVirtual.has(pairKey) && !realPairKeys.has(pairKey)) {
+            seenVirtual.add(pairKey)
+            result.push({ src: startKey, tgt: nb, isVirtual: true })
+          }
+        } else {
+          queue.push(nb)
+        }
+      }
+    }
+  }
+
+  return result
+}
 
 // ─── Auto-layout: grid grouped by device type + cabinets at bottom ────────────
 
@@ -133,6 +248,16 @@ const TopologyPage: React.FC = () => {
   const [newMapBgUrl, setNewMapBgUrl] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+
+  const toggleGroup = useCallback((type: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type)
+      else next.add(type)
+      return next
+    })
+  }, [])
 
   const dirtyLayoutRef = useRef<Record<string, { x: number; y: number; visible: boolean }>>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -292,29 +417,7 @@ const TopologyPage: React.FC = () => {
     return [...deviceNodes, ...cabinetNodes]
   }, [topology, cabinets, selectedMapId, effectiveLayout, activeMap, checkmkStatus, hasSearch, matchSet, cabMatchSet, isAdmin])
 
-  // ── Build ReactFlow edges ──────────────────────────────────────────────────
-  const rfEdges = useMemo((): Edge[] => {
-    if (!topology) return []
-    return topology.edges.map((e) => ({
-      id: `edge:${e.id}`,
-      source: `device:${e.source_device_id}`,
-      target: `device:${e.target_device_id}`,
-      label: `${e.source_interface} ↔ ${e.target_interface}`,
-      type: 'default',
-      style: { stroke: '#6b7280', strokeWidth: 1.5 },
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280', width: 10, height: 10 },
-      markerStart: { type: MarkerType.ArrowClosed, color: '#6b7280', width: 10, height: 10 },
-      labelStyle: { fontSize: 9, fill: '#6b7280' },
-      labelBgStyle: { fill: 'white', fillOpacity: 0.85 },
-      labelBgPadding: [3, 3] as [number, number],
-    }))
-  }, [topology])
-
   const [nodes, setNodes, onNodesChange] = useNodesState(rfNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(rfEdges)
-
-  React.useEffect(() => { setNodes(rfNodes) }, [rfNodes, setNodes])
-  React.useEffect(() => { setEdges(rfEdges) }, [rfEdges, setEdges])
 
   // ── Drag stop handler ──────────────────────────────────────────────────────
   const onNodeDragStop = useCallback(
@@ -445,6 +548,64 @@ const TopologyPage: React.FC = () => {
     return map
   }, [cabinets, nodes, effectiveLayout])
 
+  // ── Build ReactFlow edges (with transitivity through hidden nodes) ────────────
+  const rfEdges = useMemo((): Edge[] => {
+    if (!topology) return []
+    const collapsed = buildCollapsedEdges(
+      topology.edges,
+      topology.nodes,
+      visibilityMap,
+      cabinetVisibilityMap,
+    )
+    return collapsed.map((ce) => {
+      if (!ce.isVirtual) {
+        return {
+          id: `edge:${ce.realEdgeId}`,
+          source: ce.src,
+          target: ce.tgt,
+          label: ce.label,
+          type: 'default',
+          style: { stroke: '#6b7280', strokeWidth: 1.5 },
+          markerEnd: { type: MarkerType.ArrowClosed, color: '#6b7280', width: 10, height: 10 },
+          markerStart: { type: MarkerType.ArrowClosed, color: '#6b7280', width: 10, height: 10 },
+          labelStyle: { fontSize: 9, fill: '#6b7280' },
+          labelBgStyle: { fill: 'white', fillOpacity: 0.85 },
+          labelBgPadding: [3, 3] as [number, number],
+        }
+      }
+      const pairKey = [ce.src, ce.tgt].sort().join('|')
+      return {
+        id: `virt:${pairKey}`,
+        source: ce.src,
+        target: ce.tgt,
+        type: 'default',
+        style: { stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '5,4' },
+      }
+    })
+  }, [topology, visibilityMap, cabinetVisibilityMap])
+
+  const [edges, setEdges, onEdgesChange] = useEdgesState(rfEdges)
+
+  React.useEffect(() => { setNodes(rfNodes) }, [rfNodes, setNodes])
+  React.useEffect(() => { setEdges(rfEdges) }, [rfEdges, setEdges])
+
+  // ── Neighbor map for quick-toggle sidebar expansion ──────────────────────────
+  const neighborMap = useMemo(() => {
+    const map = new Map<string, string[]>()
+    const push = (key: string, nb: string) => { map.set(key, [...(map.get(key) ?? []), nb]) }
+    for (const e of topology?.edges ?? []) {
+      const s = `device:${e.source_device_id}`, t = `device:${e.target_device_id}`
+      push(s, t); push(t, s)
+    }
+    for (const n of topology?.nodes ?? []) {
+      if (n.cabinet_id != null) {
+        const s = `device:${n.id}`, t = `cabinet:${n.cabinet_id}`
+        push(s, t); push(t, s)
+      }
+    }
+    return map
+  }, [topology])
+
   // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 4rem)' }}>
@@ -546,48 +707,100 @@ const TopologyPage: React.FC = () => {
               <p className="text-xs text-gray-400 text-center py-4">Caricamento…</p>
             ) : (
               <>
-                {/* Devices section */}
-                <div>
-                  <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">
-                    Dispositivi ({topology.nodes.length})
-                  </div>
-                  {topology.nodes.map((n) => {
-                    const c = DEVICE_COLORS[n.device_type] ?? DEVICE_COLORS.other
-                    const visible = visibilityMap[n.id] ?? true
-                    const isMatch = hasSearch && matchSet.has(n.id)
-                    const isSelected = selectedDeviceId === n.id
-                    return (
+                {/* Devices section — grouped by type */}
+                {DEVICE_TYPE_GROUPS.map(({ type, label }) => {
+                  const groupNodes = topology.nodes.filter((n) => n.device_type === type)
+                  if (groupNodes.length === 0) return null
+                  const collapsed = collapsedGroups.has(type)
+                  const groupColors = DEVICE_COLORS[type] ?? DEVICE_COLORS.other
+                  return (
+                    <div key={type} className="mb-1">
+                      {/* Group header */}
                       <div
-                        key={n.id}
-                        className={[
-                          'flex items-center gap-1.5 px-1.5 py-1 rounded text-xs mb-0.5 transition-colors',
-                          isMatch ? 'bg-yellow-50 border border-yellow-200' : '',
-                          isSelected ? 'bg-primary-50' : 'hover:bg-gray-50',
-                          !visible ? 'opacity-40' : '',
-                        ].filter(Boolean).join(' ')}
+                        className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-0.5 flex items-center gap-1 cursor-pointer select-none hover:text-gray-600 transition-colors"
+                        onClick={() => toggleGroup(type)}
                       >
-                        {isAdmin && selectedMapId ? (
-                          <button
-                            onClick={() => toggleDeviceVisibility(n.id)}
-                            className="flex-shrink-0 text-gray-400 hover:text-gray-700"
-                            title={visible ? 'Nascondi' : 'Mostra'}
-                          >
-                            {visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                          </button>
-                        ) : (
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.dot}`} />
-                        )}
-                        <span
-                          className="truncate cursor-pointer hover:text-primary-600 flex-1"
-                          onClick={() => { setSelectedDeviceId(isSelected ? null : n.id); setSelectedCabinetId(null) }}
-                          title={n.name}
-                        >
-                          {n.name}
-                        </span>
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${groupColors.dot}`} />
+                        {label} ({groupNodes.length})
+                        {collapsed
+                          ? <ChevronRight size={10} className="ml-auto flex-shrink-0" />
+                          : <ChevronDown  size={10} className="ml-auto flex-shrink-0" />
+                        }
                       </div>
-                    )
-                  })}
-                </div>
+
+                      {/* Group items */}
+                      {!collapsed && groupNodes.map((n) => {
+                        const c = DEVICE_COLORS[n.device_type] ?? DEVICE_COLORS.other
+                        const visible = visibilityMap[n.id] ?? true
+                        const isMatch = hasSearch && matchSet.has(n.id)
+                        const isSelected = selectedDeviceId === n.id
+                        return (
+                          <div key={n.id}>
+                            <div
+                              className={[
+                                'flex items-center gap-1.5 px-1.5 py-1 rounded text-xs mb-0.5 transition-colors',
+                                isMatch    ? 'bg-yellow-50 border border-yellow-200' : '',
+                                isSelected ? 'bg-primary-50' : 'hover:bg-gray-50',
+                                !visible   ? 'opacity-40' : '',
+                              ].filter(Boolean).join(' ')}
+                            >
+                              {isAdmin && selectedMapId ? (
+                                <button
+                                  onClick={() => toggleDeviceVisibility(n.id)}
+                                  className="flex-shrink-0 text-gray-400 hover:text-gray-700"
+                                  title={visible ? 'Nascondi' : 'Mostra'}
+                                >
+                                  {visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                </button>
+                              ) : (
+                                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.dot}`} />
+                              )}
+                              <span
+                                className="truncate cursor-pointer hover:text-primary-600 flex-1"
+                                onClick={() => { setSelectedDeviceId(isSelected ? null : n.id); setSelectedCabinetId(null) }}
+                                title={n.name}
+                              >
+                                {n.name}
+                              </span>
+                            </div>
+
+                            {/* Neighbor quick-toggle (admin only, when selected) */}
+                            {isSelected && isAdmin && selectedMapId && (
+                              <div className="ml-4 mb-1 space-y-0.5">
+                                {(neighborMap.get(`device:${n.id}`) ?? []).map((nbKey) => {
+                                  const isDeviceNb = nbKey.startsWith('device:')
+                                  const nid = parseInt(nbKey.split(':')[1], 10)
+                                  const nbNode = isDeviceNb
+                                    ? topology.nodes.find((d) => d.id === nid)
+                                    : cabinets.find((cab) => cab.id === nid)
+                                  const nbVisible = isDeviceNb
+                                    ? (visibilityMap[nid] ?? true)
+                                    : (cabinetVisibilityMap[nid] ?? true)
+                                  const nbColors = isDeviceNb
+                                    ? (DEVICE_COLORS[(nbNode as TopologyNode)?.device_type] ?? DEVICE_COLORS.other)
+                                    : null
+                                  return (
+                                    <div key={nbKey} className="flex items-center gap-1 px-1 py-0.5 rounded text-[10px] text-gray-500 hover:bg-gray-50">
+                                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${nbColors?.dot ?? 'bg-slate-400'}`} />
+                                      <span className="flex-1 truncate">{(nbNode as any)?.name ?? nbKey}</span>
+                                      <button
+                                        onClick={() => isDeviceNb ? toggleDeviceVisibility(nid) : toggleCabinetVisibility(nid)}
+                                        className="text-gray-400 hover:text-gray-700 flex-shrink-0"
+                                        title={nbVisible ? 'Nascondi' : 'Mostra'}
+                                      >
+                                        {nbVisible ? <Eye size={10} /> : <EyeOff size={10} />}
+                                      </button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
 
                 {/* Cabinets section */}
                 {cabinets.length > 0 && (
@@ -601,33 +814,59 @@ const TopologyPage: React.FC = () => {
                       const isMatch = hasSearch && cabMatchSet.has(cab.id)
                       const isSelected = selectedCabinetId === cab.id
                       return (
-                        <div
-                          key={cab.id}
-                          className={[
-                            'flex items-center gap-1.5 px-1.5 py-1 rounded text-xs mb-0.5 transition-colors',
-                            isMatch ? 'bg-yellow-50 border border-yellow-200' : '',
-                            isSelected ? 'bg-slate-100' : 'hover:bg-gray-50',
-                            !visible ? 'opacity-40' : '',
-                          ].filter(Boolean).join(' ')}
-                        >
-                          {isAdmin && selectedMapId ? (
-                            <button
-                              onClick={() => toggleCabinetVisibility(cab.id)}
-                              className="flex-shrink-0 text-gray-400 hover:text-gray-700"
-                              title={visible ? 'Nascondi' : 'Mostra'}
-                            >
-                              {visible ? <Eye size={12} /> : <EyeOff size={12} />}
-                            </button>
-                          ) : (
-                            <span className="w-2 h-2 rounded flex-shrink-0 bg-slate-400" />
-                          )}
-                          <span
-                            className="truncate cursor-pointer hover:text-slate-700 flex-1"
-                            onClick={() => { setSelectedCabinetId(isSelected ? null : cab.id); setSelectedDeviceId(null) }}
-                            title={cab.name}
+                        <div key={cab.id}>
+                          <div
+                            className={[
+                              'flex items-center gap-1.5 px-1.5 py-1 rounded text-xs mb-0.5 transition-colors',
+                              isMatch ? 'bg-yellow-50 border border-yellow-200' : '',
+                              isSelected ? 'bg-slate-100' : 'hover:bg-gray-50',
+                              !visible ? 'opacity-40' : '',
+                            ].filter(Boolean).join(' ')}
                           >
-                            {cab.name}
-                          </span>
+                            {isAdmin && selectedMapId ? (
+                              <button
+                                onClick={() => toggleCabinetVisibility(cab.id)}
+                                className="flex-shrink-0 text-gray-400 hover:text-gray-700"
+                                title={visible ? 'Nascondi' : 'Mostra'}
+                              >
+                                {visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                              </button>
+                            ) : (
+                              <span className="w-2 h-2 rounded flex-shrink-0 bg-slate-400" />
+                            )}
+                            <span
+                              className="truncate cursor-pointer hover:text-slate-700 flex-1"
+                              onClick={() => { setSelectedCabinetId(isSelected ? null : cab.id); setSelectedDeviceId(null) }}
+                              title={cab.name}
+                            >
+                              {cab.name}
+                            </span>
+                          </div>
+
+                          {/* Neighbor quick-toggle for cabinet (admin only, when selected) */}
+                          {isSelected && isAdmin && selectedMapId && (
+                            <div className="ml-4 mb-1 space-y-0.5">
+                              {(neighborMap.get(`cabinet:${cab.id}`) ?? []).map((nbKey) => {
+                                const nid = parseInt(nbKey.split(':')[1], 10)
+                                const nbNode = topology.nodes.find((d) => d.id === nid)
+                                const nbVisible = visibilityMap[nid] ?? true
+                                const nbColors = DEVICE_COLORS[nbNode?.device_type ?? 'other'] ?? DEVICE_COLORS.other
+                                return (
+                                  <div key={nbKey} className="flex items-center gap-1 px-1 py-0.5 rounded text-[10px] text-gray-500 hover:bg-gray-50">
+                                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${nbColors.dot}`} />
+                                    <span className="flex-1 truncate">{nbNode?.name ?? nbKey}</span>
+                                    <button
+                                      onClick={() => toggleDeviceVisibility(nid)}
+                                      className="text-gray-400 hover:text-gray-700 flex-shrink-0"
+                                      title={nbVisible ? 'Nascondi' : 'Mostra'}
+                                    >
+                                      {nbVisible ? <Eye size={10} /> : <EyeOff size={10} />}
+                                    </button>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
