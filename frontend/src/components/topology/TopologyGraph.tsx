@@ -5,6 +5,8 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  Handle,
+  Position,
   useReactFlow,
   type Node,
   type Edge,
@@ -54,27 +56,31 @@ export interface TopologyDeviceNodeData extends Record<string, unknown> {
 export const TopologyDeviceNode = memo(({ data, selected }: { data: TopologyDeviceNodeData; selected: boolean }) => {
   const c = DEVICE_COLORS[data.device_type] ?? DEVICE_COLORS.other
   return (
-    <div
-      className={[
-        'rounded-lg border-2 px-2.5 py-1.5 text-xs shadow-sm cursor-pointer transition-all',
-        c.bg, c.border, c.text,
-        selected ? 'ring-2 ring-primary-500 ring-offset-1' : '',
-        data.highlighted ? 'ring-4 ring-yellow-400 ring-offset-1' : '',
-        data.dimmed ? 'opacity-20' : '',
-      ].filter(Boolean).join(' ')}
-      style={{ minWidth: 120, maxWidth: 180 }}
-      onClick={() => data.onSelect(data.device_id)}
-    >
-      <div className="font-semibold truncate">{data.label}</div>
-      {data.primary_ip && (
-        <div className="text-[10px] opacity-70 font-mono truncate">{data.primary_ip}</div>
-      )}
-      {data.checkmk_status && (
-        <div className="mt-0.5">
-          <CheckMKBadge status={data.checkmk_status} />
-        </div>
-      )}
-    </div>
+    <>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      <div
+        className={[
+          'rounded-lg border-2 px-2.5 py-1.5 text-xs shadow-sm cursor-pointer transition-all',
+          c.bg, c.border, c.text,
+          selected ? 'ring-2 ring-primary-500 ring-offset-1' : '',
+          data.highlighted ? 'ring-4 ring-yellow-400 ring-offset-1' : '',
+          data.dimmed ? 'opacity-20' : '',
+        ].filter(Boolean).join(' ')}
+        style={{ minWidth: 120, maxWidth: 180 }}
+        onClick={() => data.onSelect(data.device_id)}
+      >
+        <div className="font-semibold truncate">{data.label}</div>
+        {data.primary_ip && (
+          <div className="text-[10px] opacity-70 font-mono truncate">{data.primary_ip}</div>
+        )}
+        {data.checkmk_status && (
+          <div className="mt-0.5">
+            <CheckMKBadge status={data.checkmk_status} />
+          </div>
+        )}
+      </div>
+    </>
   )
 })
 
@@ -94,25 +100,29 @@ export interface TopologyCabinetNodeData extends Record<string, unknown> {
 
 export const TopologyCabinetNode = memo(({ data, selected }: { data: TopologyCabinetNodeData; selected: boolean }) => {
   return (
-    <div
-      className={[
-        'rounded-lg border-2 px-3 py-2 text-xs shadow-sm cursor-pointer transition-all',
-        'bg-slate-100 border-slate-500 text-slate-800',
-        selected ? 'ring-2 ring-primary-500 ring-offset-1' : '',
-        data.highlighted ? 'ring-4 ring-yellow-400 ring-offset-1' : '',
-        data.dimmed ? 'opacity-20' : '',
-      ].filter(Boolean).join(' ')}
-      style={{ minWidth: 140, maxWidth: 200 }}
-      onClick={() => data.onSelect(data.cabinet_id)}
-    >
-      <div className="flex items-center gap-1.5 mb-0.5">
-        <LayoutDashboard size={12} className="flex-shrink-0 text-slate-500" />
-        <div className="font-bold truncate">{data.label}</div>
+    <>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      <div
+        className={[
+          'rounded-lg border-2 px-3 py-2 text-xs shadow-sm cursor-pointer transition-all',
+          'bg-slate-100 border-slate-500 text-slate-800',
+          selected ? 'ring-2 ring-primary-500 ring-offset-1' : '',
+          data.highlighted ? 'ring-4 ring-yellow-400 ring-offset-1' : '',
+          data.dimmed ? 'opacity-20' : '',
+        ].filter(Boolean).join(' ')}
+        style={{ minWidth: 140, maxWidth: 200 }}
+        onClick={() => data.onSelect(data.cabinet_id)}
+      >
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <LayoutDashboard size={12} className="flex-shrink-0 text-slate-500" />
+          <div className="font-bold truncate">{data.label}</div>
+        </div>
+        <div className="text-[10px] text-slate-500 truncate">
+          {data.u_count}U{data.site_name ? ` — ${data.site_name}` : ''}
+        </div>
       </div>
-      <div className="text-[10px] text-slate-500 truncate">
-        {data.u_count}U{data.site_name ? ` — ${data.site_name}` : ''}
-      </div>
-    </div>
+    </>
   )
 })
 
