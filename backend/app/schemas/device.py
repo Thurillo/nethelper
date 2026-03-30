@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from datetime import datetime
 from typing import Optional
 
@@ -8,6 +9,17 @@ from pydantic import BaseModel, field_validator
 from app.models.device import DeviceStatus, DeviceType
 from app.models.scan_job import ScanType
 from app.core.mac import normalize_mac
+
+
+def _validate_ip(v: Optional[str]) -> Optional[str]:
+    """Validate that a string is a valid IPv4/IPv6 address (without prefix)."""
+    if not v:
+        return None
+    try:
+        ipaddress.ip_address(v.strip())
+        return v.strip()
+    except ValueError:
+        raise ValueError(f"Indirizzo IP non valido: '{v}'")
 
 
 class DeviceCreate(BaseModel):
@@ -45,6 +57,11 @@ class DeviceCreate(BaseModel):
         if result is None:
             raise ValueError(f"Formato MAC non valido: '{v}'. Usa XX:XX:XX:XX:XX:XX, XXXX.XXXX.XXXX o simili.")
         return result
+
+    @field_validator('primary_ip', 'management_ip', mode='before')
+    @classmethod
+    def validate_ip_field(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_ip(v)
 
 
 class DeviceUpdate(BaseModel):
@@ -86,6 +103,11 @@ class DeviceUpdate(BaseModel):
         if result is None:
             raise ValueError(f"Formato MAC non valido: '{v}'. Usa XX:XX:XX:XX:XX:XX, XXXX.XXXX.XXXX o simili.")
         return result
+
+    @field_validator('primary_ip', 'management_ip', mode='before')
+    @classmethod
+    def validate_ip_field(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_ip(v)
 
 
 class DeviceRead(BaseModel):

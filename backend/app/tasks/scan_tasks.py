@@ -64,7 +64,7 @@ def _get_event_loop() -> asyncio.AbstractEventLoop:
         return loop
 
 
-@celery_app.task(bind=True, max_retries=3, default_retry_delay=30)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=30, time_limit=600, soft_time_limit=540)
 def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> dict:
     """Run a full or partial SNMP/SSH device scan."""
 
@@ -227,7 +227,7 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
             return {"status": "failed", "error": str(exc)}
 
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, time_limit=1800, soft_time_limit=1740)
 def run_ip_range_scan(self, scan_job_id: int) -> dict:
     """Scan an IP range for live hosts using TCP + ICMP in parallel."""
 

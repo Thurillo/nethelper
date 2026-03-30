@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -15,6 +16,8 @@ from app.schemas.scan_job import IpRangeScanRequest, ScanJobCreate, ScanJobRead
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter(prefix="/scan-jobs", tags=["scan-jobs"])
+
+_MAX_IP_RANGE = 10_000
 
 
 @router.get("/", response_model=PaginatedResponse[ScanJobRead])
@@ -35,7 +38,12 @@ async def list_scan_jobs(
         status=status_filter,
         scan_type=scan_type,
     )
-    _total = await crud_scan_job.count(db)
+    _total = await crud_scan_job.count(
+        db,
+        **({} if device_id is None else {"device_id": device_id}),
+        **({} if status_filter is None else {"status": status_filter}),
+        **({} if scan_type is None else {"scan_type": scan_type}),
+    )
     return PaginatedResponse.build([ScanJobRead.model_validate(j) for j in jobs], total=_total, page=page, size=size)
 
 
@@ -60,6 +68,21 @@ async def start_ip_range_scan(
 ) -> ScanJobRead:
     from app.models.scan_job import ScanType
 
+    # Validate IP range size server-side
+    try:
+        start = ipaddress.ip_address(body.start_ip)
+        end = ipaddress.ip_address(body.end_ip)
+        ip_count = int(end) - int(start) + 1
+        if ip_count <= 0:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail="L'IP iniziale deve essere minore dell'IP finale.")
+        if ip_count > _MAX_IP_RANGE:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                detail=f"Range troppo grande: {ip_count} indirizzi (massimo {_MAX_IP_RANGE:,}).")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail=f"Indirizzo IP non valido: {exc}") from exc
+
     job_in = ScanJobCreate(
         scan_type=ScanType.ip_range,
         range_start_ip=body.start_ip,
@@ -73,9 +96,11 @@ async def start_ip_range_scan(
     try:
         from app.tasks.scan_tasks import run_ip_range_scan
         task = run_ip_range_scan.delay(job.id)
-        await crud_scan_job.update_status(
-            db, job.id, ScanStatus.running, celery_task_id=task.id
-        )
+        # Store celery_task_id while keeping status=pending;
+        # the worker itself will transition to running on first execution.
+        job.celery_task_id = task.id
+        db.add(job)
+        await db.flush()
     except Exception as exc:
         await crud_scan_job.update_status(
             db, job.id, ScanStatus.failed, error_message=str(exc)

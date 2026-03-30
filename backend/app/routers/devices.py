@@ -227,13 +227,13 @@ async def trigger_device_scan(
     )
     job = await crud_scan_job.create_job(db, job_in)
 
-    # Trigger Celery task
+    # Trigger Celery task — keep status=pending; worker will set running on first execution
     try:
         from app.tasks.scan_tasks import run_device_scan
         task = run_device_scan.delay(device_id, job.id, body.scan_type.value)
-        await crud_scan_job.update_status(
-            db, job.id, ScanStatus.running, celery_task_id=task.id
-        )
+        job.celery_task_id = task.id
+        db.add(job)
+        await db.flush()
     except Exception as exc:
         await crud_scan_job.update_status(
             db, job.id, ScanStatus.failed, error_message=str(exc)

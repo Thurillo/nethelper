@@ -40,9 +40,9 @@ const DeviceDetailPage: React.FC = () => {
   const qc = useQueryClient()
 
   const { data: device, isLoading } = useDevice(deviceId)
-  const { data: interfaces } = useDeviceInterfaces(deviceId)
-  const { data: ipAddresses } = useDeviceIpAddresses(deviceId)
-  const { data: macData } = useDeviceMacEntries(deviceId)
+  const { data: interfaces } = useDeviceInterfaces(deviceId, activeTab === 'interfacce')
+  const { data: ipAddresses } = useDeviceIpAddresses(deviceId, activeTab === 'ip')
+  const { data: macData } = useDeviceMacEntries(deviceId, activeTab === 'mac', undefined)
   const { data: cabinetsData } = useQuery({ queryKey: ['cabinets', 'all'], queryFn: () => cabinetsApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: vendorsData } = useQuery({ queryKey: ['vendors', 'all'], queryFn: () => vendorsApi.list({ size: 100 }), staleTime: 60_000 })
   const updateDevice = useUpdateDevice()
@@ -62,11 +62,19 @@ const DeviceDetailPage: React.FC = () => {
   })
   const linkMutation = useMutation({
     mutationFn: (hostName: string) => checkmkApi.linkDevice(deviceId, hostName),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['device', deviceId] }); qc.invalidateQueries({ queryKey: ['checkmk', 'status'] }) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['devices', deviceId] })
+      qc.invalidateQueries({ queryKey: ['devices'], exact: false })
+      qc.invalidateQueries({ queryKey: ['checkmk', 'status'] })
+    },
   })
   const unlinkMutation = useMutation({
     mutationFn: () => checkmkApi.unlinkDevice(deviceId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['device', deviceId] }); qc.invalidateQueries({ queryKey: ['checkmk', 'status'] }) },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['devices', deviceId] })
+      qc.invalidateQueries({ queryKey: ['devices'], exact: false })
+      qc.invalidateQueries({ queryKey: ['checkmk', 'status'] })
+    },
   })
 
   const openEdit = () => {

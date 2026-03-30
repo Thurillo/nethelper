@@ -142,7 +142,38 @@ def create_app() -> FastAPI:
     # ----------------------------------------------------------------
     @app.get("/api/health", tags=["health"])
     async def health_check():
-        return {"status": "ok", "app": settings.APP_NAME}
+        from sqlalchemy import text
+        from app.database import AsyncSessionLocal
+        import asyncio
+
+        db_ok = False
+        redis_ok = False
+
+        # Check DB
+        try:
+            async with AsyncSessionLocal() as session:
+                await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=2.0)
+            db_ok = True
+        except Exception:
+            pass
+
+        # Check Redis
+        try:
+            import redis.asyncio as aioredis
+            r = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+            await asyncio.wait_for(r.ping(), timeout=2.0)
+            await r.aclose()
+            redis_ok = True
+        except Exception:
+            pass
+
+        overall = "ok" if (db_ok and redis_ok) else "degraded"
+        return {
+            "status": overall,
+            "app": settings.APP_NAME,
+            "db": db_ok,
+            "redis": redis_ok,
+        }
 
     # ----------------------------------------------------------------
     # Serve frontend SPA (if built)

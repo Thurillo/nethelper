@@ -29,9 +29,10 @@ async def list_interfaces(
 ) -> PaginatedResponse[InterfaceRead]:
     if device_id is not None:
         interfaces = await crud_interface.get_by_device(db, device_id)
+        _total = await crud_interface.count(db, device_id=device_id)
     else:
         interfaces = await crud_interface.get_multi(db, skip=(page-1)*size, limit=size)
-    _total = await crud_interface.count(db)
+        _total = await crud_interface.count(db)
     return PaginatedResponse.build([InterfaceRead.model_validate(i) for i in interfaces], total=_total, page=page, size=size)
 
 
