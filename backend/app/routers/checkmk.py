@@ -198,7 +198,7 @@ async def test_connection(
 ):
     """Test connectivity to CheckMK and return version info."""
     url, username, api_key = await _get_checkmk_credentials(db)
-    api_url = url.rstrip("/") + "/check_mk/api/1.0/domain-types/version/actions/show/invoke"
+    api_url = url.rstrip("/") + "/check_mk/api/1.0/version"
     headers = _checkmk_auth_headers(username, api_key)
 
     try:
@@ -229,7 +229,7 @@ async def list_hosts(
     for host in raw:
         extensions = host.get("extensions", {})
         name = extensions.get("name") or host.get("id", "")
-        address = extensions.get("attributes", {}).get("ipaddress", "")
+        address = extensions.get("address", "") or extensions.get("attributes", {}).get("ipaddress", "")
         result.append(CheckMKHostItem(name=name, address=address))
     return result
 
@@ -269,8 +269,7 @@ async def get_status(
     for host in raw:
         extensions = host.get("extensions", {})
         name = extensions.get("name") or host.get("id", "")
-        attrs = extensions.get("attributes", {})
-        address = attrs.get("ipaddress", "")
+        address = extensions.get("address", "") or extensions.get("attributes", {}).get("ipaddress", "")
         # state is nested under "state" in the extensions — CheckMK Live Status
         state_val = extensions.get("state", -1)
         if isinstance(state_val, dict):
