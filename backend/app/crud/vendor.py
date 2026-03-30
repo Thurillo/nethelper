@@ -12,6 +12,11 @@ from app.core.crypto import encrypt_value, decrypt_value
 
 
 class CRUDVendor(CRUDBase[Vendor, VendorCreate, VendorUpdate]):
+    async def get_multi(self, db: AsyncSession, skip: int = 0, limit: int = 100, **filters) -> list[Vendor]:
+        stmt = select(Vendor).order_by(Vendor.name).offset(skip).limit(limit)
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
     async def get_by_slug(self, db: AsyncSession, slug: str) -> Optional[Vendor]:
         result = await db.execute(select(Vendor).where(Vendor.slug == slug))
         return result.scalar_one_or_none()
