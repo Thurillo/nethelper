@@ -97,10 +97,6 @@ const IpRangeScanForm: React.FC<IpRangeScanFormProps> = ({ onScanStarted }) => {
       setError('Intervallo troppo grande (max 65536 indirizzi)')
       return
     }
-    if (selectedPorts.size === 0) {
-      setError('Seleziona almeno una porta')
-      return
-    }
     try {
       const job = await startScan.mutateAsync({
         start_ip: ipStart,
@@ -221,7 +217,7 @@ const IpRangeScanForm: React.FC<IpRangeScanFormProps> = ({ onScanStarted }) => {
         </div>
 
         {/* Selected ports tags */}
-        {sortedPorts.length > 0 && (
+        {sortedPorts.length > 0 ? (
           <div className="flex flex-wrap gap-1.5 p-2 bg-gray-50 rounded-lg border border-gray-200">
             {sortedPorts.map((port) => (
               <span key={port} className="inline-flex items-center gap-1 px-2 py-0.5 bg-white border border-gray-300 rounded text-xs font-mono text-gray-700">
@@ -233,6 +229,10 @@ const IpRangeScanForm: React.FC<IpRangeScanFormProps> = ({ onScanStarted }) => {
             ))}
             <span className="text-xs text-gray-400 self-center ml-1">{sortedPorts.length} porte</span>
           </div>
+        ) : (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-1.5">
+            Nessuna porta selezionata — modalità <strong>ping-only</strong>: verranno mostrati solo gli host che rispondono al ping ICMP.
+          </p>
         )}
       </div>
 

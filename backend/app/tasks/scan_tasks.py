@@ -245,7 +245,7 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
 
             start_ip = job.range_start_ip
             end_ip = job.range_end_ip
-            ports: list[int] = job.range_ports or [22, 80, 443, 8080]
+            ports: list[int] = job.range_ports if job.range_ports is not None else [22, 80, 443, 8080]
 
             if not start_ip or not end_ip:
                 await crud_scan_job.update_status(

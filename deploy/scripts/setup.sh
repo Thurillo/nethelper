@@ -216,6 +216,9 @@ do_install() {
     systemctl is-active nethelper-worker &>/dev/null && ok "nethelper-worker attivo" || warn "nethelper-worker non attivo"
     systemctl is-active nethelper-beat   &>/dev/null && ok "nethelper-beat   attivo" || warn "nethelper-beat non attivo"
 
+    # Permessi ICMP per ping da processo non-root (necessario per scan IP range)
+    setcap cap_net_raw+p "$(which ping)" 2>/dev/null && ok "Permessi ICMP (setcap) configurati" || warn "setcap non disponibile — il ping potrebbe non funzionare nelle scan"
+
     cp "$APP_DIR/deploy/nginx/nethelper.conf" /etc/nginx/sites-available/
     ln -sf /etc/nginx/sites-available/nethelper.conf /etc/nginx/sites-enabled/nethelper.conf
     rm -f /etc/nginx/sites-enabled/default
