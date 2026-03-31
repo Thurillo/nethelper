@@ -1,7 +1,8 @@
 import apiClient from './client'
 import type {
   Device, DeviceCreate, DeviceFilters, NetworkInterface, IpAddress,
-  MacEntry, ScanJob, PaginatedResponse, DeviceBulkCreateRequest, DeviceBulkCreateResponse
+  MacEntry, ScanJob, PaginatedResponse, DeviceBulkCreateRequest, DeviceBulkCreateResponse,
+  DeviceConnectionsPreview
 } from '../types'
 
 export const devicesApi = {
@@ -56,6 +57,11 @@ export const devicesApi = {
 
   bulkCreate: async (data: DeviceBulkCreateRequest): Promise<DeviceBulkCreateResponse> => {
     const response = await apiClient.post<DeviceBulkCreateResponse>('/devices/bulk', data)
+    return response.data
+  },
+
+  getConnectionsPreview: async (id: number): Promise<DeviceConnectionsPreview> => {
+    const response = await apiClient.get<DeviceConnectionsPreview>(`/devices/${id}/connections-preview`)
     return response.data
   },
 }

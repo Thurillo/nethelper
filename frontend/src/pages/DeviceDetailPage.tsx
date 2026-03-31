@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { it } from 'date-fns/locale'
-import { Edit2, ChevronDown, ChevronRight, Eye, EyeOff, Link2, Link2Off } from 'lucide-react'
+import { Edit2, Trash2, ChevronDown, ChevronRight, Eye, EyeOff, Link2, Link2Off } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useDevice, useDeviceInterfaces, useDeviceIpAddresses, useDeviceMacEntries, useUpdateDevice } from '../hooks/useDevices'
+import { useDevice, useDeviceInterfaces, useDeviceIpAddresses, useDeviceMacEntries, useUpdateDevice, useDeleteDevice, useDeviceConnectionsPreview } from '../hooks/useDevices'
 import { cabinetsApi } from '../api/cabinets'
 import { vendorsApi } from '../api/vendors'
 import { checkmkApi } from '../api/checkmk'
@@ -12,6 +12,7 @@ import { DeviceTypeBadge, DeviceStatusBadge } from '../components/common/Badge'
 import CheckMKBadge from '../components/common/CheckMKBadge'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import Modal from '../components/common/Modal'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 import ScanLauncher from '../components/scan/ScanLauncher'
 import ScanJobList from '../components/scan/ScanJobList'
 import ScanResultPanel from '../components/scan/ScanResultPanel'
@@ -27,11 +28,13 @@ const DEVICE_STATUSES: DeviceStatus[] = ['active', 'inactive', 'planned', 'decom
 const DeviceDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const deviceId = Number(id)
+  const navigate = useNavigate()
   const { isAdmin } = useAuthStore()
   const [activeTab, setActiveTab] = useState<TabKey>('interfacce')
   const [selectedJob, setSelectedJob] = useState<ScanJob | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [editForm, setEditForm] = useState<Record<string, unknown>>({})
   const [showCredsSection, setShowCredsSection] = useState(false)
   const [showSnmpV3, setShowSnmpV3] = useState(false)
@@ -46,6 +49,8 @@ const DeviceDetailPage: React.FC = () => {
   const { data: cabinetsData } = useQuery({ queryKey: ['cabinets', 'all'], queryFn: () => cabinetsApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: vendorsData } = useQuery({ queryKey: ['vendors', 'all'], queryFn: () => vendorsApi.list({ size: 100 }), staleTime: 60_000 })
   const updateDevice = useUpdateDevice()
+  const deleteDevice = useDeleteDevice()
+  const { data: connectionsPreview, isLoading: previewLoading } = useDeviceConnectionsPreview(deviceId, showDeleteConfirm)
 
   // CheckMK
   const { data: checkmkStatus } = useQuery({
@@ -185,13 +190,22 @@ const DeviceDetailPage: React.FC = () => {
               <DeviceTypeBadge type={device.device_type} />
               <DeviceStatusBadge status={device.status} />
               {isAdmin() && (
-                <button
-                  onClick={openEdit}
-                  className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
-                >
-                  <Edit2 size={13} />
-                  Modifica
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    onClick={openEdit}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
+                  >
+                    <Edit2 size={13} />
+                    Modifica
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 rounded-lg hover:bg-red-50 text-red-600"
+                  >
+                    <Trash2 size={13} />
+                    Elimina
+                  </button>
+                </div>
               )}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
@@ -380,6 +394,33 @@ const DeviceDetailPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          deleteDevice.mutate(deviceId, {
+            onSuccess: () => {
+              setShowDeleteConfirm(false)
+              navigate('/dispositivi')
+            },
+          })
+        }}
+        title="Elimina dispositivo"
+        message={
+          previewLoading
+            ? `Verifica connessioni di "${device?.name}" in corso...`
+            : connectionsPreview && connectionsPreview.cables_total > 0
+              ? connectionsPreview.pp_connections.length > 0
+                ? `⚠️ "${device?.name}" ha ${connectionsPreview.cables_total} cavo/i attivi, di cui ${connectionsPreview.pp_connections.length} verso patch panel:\n${connectionsPreview.pp_connections.map(c => `• ${c.pp_name} — ${c.pp_port} ↔ ${c.device_port}`).join('\n')}\n\nI cavi verranno rimossi. Le porte del patch panel rimarranno disponibili.`
+                : `"${device?.name}" ha ${connectionsPreview.cables_total} cavo/i attivi che verranno rimossi. Continuare?`
+              : `Sei sicuro di voler eliminare "${device?.name}"? L'operazione non può essere annullata.`
+        }
+        confirmLabel="Elimina"
+        isLoading={deleteDevice.isPending || previewLoading}
+        variant={connectionsPreview && connectionsPreview.pp_connections.length > 0 ? 'warning' : 'danger'}
+      />
 
       {/* Edit modal */}
       <Modal

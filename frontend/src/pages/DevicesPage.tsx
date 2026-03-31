@@ -7,7 +7,7 @@ import { sitesApi } from '../api/sites'
 import { cabinetsApi } from '../api/cabinets'
 import { vendorsApi } from '../api/vendors'
 import { useAuthStore } from '../store/authStore'
-import { useDevices, useDeleteDevice } from '../hooks/useDevices'
+import { useDevices, useDeleteDevice, useDeviceConnectionsPreview } from '../hooks/useDevices'
 import { useCreateCabinet } from '../hooks/useCabinets'
 import Table, { Column } from '../components/common/Table'
 import Modal from '../components/common/Modal'
@@ -58,6 +58,7 @@ const DevicesPage: React.FC = () => {
   const [form, setForm] = useState<DeviceCreate>(defaultForm)
   const [error, setError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Device | null>(null)
+  const [previewEnabled, setPreviewEnabled] = useState(false)
   const [colMenuOpen, setColMenuOpen] = useState(false)
   const [showCabinetModal, setShowCabinetModal] = useState(false)
   const [cabinetForm, setCabinetForm] = useState<CabinetCreate>(defaultCabinetForm)
@@ -114,6 +115,7 @@ const DevicesPage: React.FC = () => {
   })
 
   const deleteDevice = useDeleteDevice()
+  const { data: connectionsPreview, isLoading: previewLoading } = useDeviceConnectionsPreview(deleteTarget?.id, previewEnabled)
 
   const openCreate = () => { setEditing(null); setForm(defaultForm); setError(null); setIsModalOpen(true) }
   const openEdit = (d: Device) => {
@@ -209,7 +211,7 @@ const DevicesPage: React.FC = () => {
     allColumns.push({ key: 'actions', header: '', render: (d) => (
       <div className="flex gap-2">
         <button onClick={(e) => { e.stopPropagation(); openEdit(d) }} className="text-xs text-primary-600 hover:underline">Modifica</button>
-        <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(d) }} className="text-xs text-red-500 hover:underline">Elimina</button>
+        <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(d); setPreviewEnabled(true) }} className="text-xs text-red-500 hover:underline">Elimina</button>
       </div>
     )})
   }
@@ -463,12 +465,23 @@ const DevicesPage: React.FC = () => {
 
       <ConfirmDialog
         isOpen={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => { if (deleteTarget) deleteDevice.mutate(deleteTarget.id); setDeleteTarget(null) }}
+        onClose={() => { setDeleteTarget(null); setPreviewEnabled(false) }}
+        onConfirm={() => {
+          if (deleteTarget) deleteDevice.mutate(deleteTarget.id, { onSuccess: () => { setDeleteTarget(null); setPreviewEnabled(false) } })
+        }}
         title="Elimina dispositivo"
-        message={`Sei sicuro di voler eliminare "${deleteTarget?.name}"? L'operazione non può essere annullata.`}
+        message={
+          previewLoading
+            ? `Verifica connessioni di "${deleteTarget?.name}" in corso...`
+            : connectionsPreview && connectionsPreview.cables_total > 0
+              ? connectionsPreview.pp_connections.length > 0
+                ? `⚠️ "${deleteTarget?.name}" ha ${connectionsPreview.cables_total} cavo/i attivi, di cui ${connectionsPreview.pp_connections.length} verso patch panel:\n${connectionsPreview.pp_connections.map(c => `• ${c.pp_name} — ${c.pp_port} ↔ ${c.device_port}`).join('\n')}\n\nI cavi verranno rimossi. Le porte del patch panel rimarranno disponibili.`
+                : `"${deleteTarget?.name}" ha ${connectionsPreview.cables_total} cavo/i attivi che verranno rimossi. Continuare?`
+              : `Sei sicuro di voler eliminare "${deleteTarget?.name}"? L'operazione non può essere annullata.`
+        }
         confirmLabel="Elimina"
-        isLoading={deleteDevice.isPending}
+        isLoading={deleteDevice.isPending || previewLoading}
+        variant={connectionsPreview && connectionsPreview.pp_connections.length > 0 ? 'warning' : 'danger'}
       />
     </div>
   )

@@ -61,7 +61,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <div className="flex-shrink-0 mt-0.5">
           <AlertTriangle className="w-6 h-6 text-yellow-500" />
         </div>
-        <p className="text-sm text-gray-600">{message}</p>
+        <p className="text-sm text-gray-600 whitespace-pre-line">{message}</p>
       </div>
     </Modal>
   )

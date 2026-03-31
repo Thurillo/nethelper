@@ -194,3 +194,14 @@ class DeviceBulkCreateResponse(BaseModel):
 
 class DeviceScanRequest(BaseModel):
     scan_type: ScanType
+
+
+class PPConnection(BaseModel):
+    pp_name: str
+    pp_port: str
+    device_port: str
+
+
+class DeviceConnectionsPreview(BaseModel):
+    cables_total: int
+    pp_connections: list[PPConnection]

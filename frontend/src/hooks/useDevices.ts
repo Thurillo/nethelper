@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { devicesApi } from '../api/devices'
+import { useUiStore } from '../store/uiStore'
 import type { DeviceCreate, DeviceFilters } from '../types'
 
 export const useDevices = (filters?: DeviceFilters) => {
@@ -69,10 +70,20 @@ export const useUpdateDevice = () => {
 
 export const useDeleteDevice = () => {
   const qc = useQueryClient()
+  const { addToast } = useUiStore()
   return useMutation({
     mutationFn: (id: number) => devicesApi.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['devices'] })
+      qc.invalidateQueries({ queryKey: ['devices'], exact: false })
     },
+    onError: () => addToast("Errore durante l'eliminazione del dispositivo", 'error'),
   })
 }
+
+export const useDeviceConnectionsPreview = (deviceId: number | undefined, enabled: boolean) =>
+  useQuery({
+    queryKey: ['devices', deviceId, 'connections-preview'],
+    queryFn: () => devicesApi.getConnectionsPreview(deviceId!),
+    enabled: !!deviceId && enabled,
+    staleTime: 0,
+  })

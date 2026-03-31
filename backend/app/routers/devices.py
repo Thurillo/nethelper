@@ -14,7 +14,7 @@ from app.crud.scan_job import crud_scan_job
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.models.scan_job import ScanStatus
-from app.schemas.device import DeviceBulkCreateRequest, DeviceBulkCreateResponse, DeviceCreate, DeviceRead, DeviceScanRequest, DeviceUpdate
+from app.schemas.device import DeviceBulkCreateRequest, DeviceBulkCreateResponse, DeviceConnectionsPreview, DeviceCreate, DeviceRead, DeviceScanRequest, DeviceUpdate
 from app.schemas.interface import InterfaceRead
 from app.schemas.ip_address import IpAddressRead
 from app.schemas.mac_entry import MacEntryRead
@@ -128,6 +128,74 @@ async def get_device(
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
     return DeviceRead.model_validate(device)
+
+
+@router.get("/{device_id}/connections-preview", response_model=DeviceConnectionsPreview)
+async def get_connections_preview(
+    device_id: int,
+    _: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> DeviceConnectionsPreview:
+    from sqlalchemy import select
+    from sqlalchemy.orm import aliased
+    from app.models.interface import Interface
+    from app.models.cable import Cable
+    from app.models.device import Device as DeviceModel
+
+    device = await crud_device.get(db, device_id)
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
+
+    # Aliases for the two interface sides
+    IfaceA = aliased(Interface)
+    IfaceB = aliased(Interface)
+    OtherDev = aliased(DeviceModel)
+
+    # Cables where this device is on side A (interface_a)
+    stmt_a = (
+        select(
+            IfaceA.name.label("device_port"),
+            IfaceB.name.label("other_port"),
+            OtherDev.name.label("other_device_name"),
+            OtherDev.device_type.label("other_device_type"),
+        )
+        .select_from(Cable)
+        .join(IfaceA, Cable.interface_a_id == IfaceA.id)
+        .join(IfaceB, Cable.interface_b_id == IfaceB.id)
+        .join(OtherDev, IfaceB.device_id == OtherDev.id)
+        .where(IfaceA.device_id == device_id)
+    )
+
+    IfaceA2 = aliased(Interface)
+    IfaceB2 = aliased(Interface)
+    OtherDev2 = aliased(DeviceModel)
+
+    # Cables where this device is on side B (interface_b)
+    stmt_b = (
+        select(
+            IfaceB2.name.label("device_port"),
+            IfaceA2.name.label("other_port"),
+            OtherDev2.name.label("other_device_name"),
+            OtherDev2.device_type.label("other_device_type"),
+        )
+        .select_from(Cable)
+        .join(IfaceA2, Cable.interface_a_id == IfaceA2.id)
+        .join(IfaceB2, Cable.interface_b_id == IfaceB2.id)
+        .join(OtherDev2, IfaceA2.device_id == OtherDev2.id)
+        .where(IfaceB2.device_id == device_id)
+    )
+
+    result_a = await db.execute(stmt_a)
+    result_b = await db.execute(stmt_b)
+    all_connections = list(result_a.all()) + list(result_b.all())
+
+    pp_connections = [
+        {"pp_name": row.other_device_name, "pp_port": row.other_port, "device_port": row.device_port}
+        for row in all_connections
+        if str(row.other_device_type) == "patch_panel"
+    ]
+
+    return DeviceConnectionsPreview(cables_total=len(all_connections), pp_connections=pp_connections)
 
 
 @router.patch("/{device_id}", response_model=DeviceRead)

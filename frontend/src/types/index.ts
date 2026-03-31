@@ -253,6 +253,11 @@ export interface DeviceBulkCreateResponse {
   errors: string[]
 }
 
+export interface DeviceConnectionsPreview {
+  cables_total: number
+  pp_connections: Array<{ pp_name: string; pp_port: string; device_port: string }>
+}
+
 // ============================================================
 // INTERFACES
 // ============================================================
