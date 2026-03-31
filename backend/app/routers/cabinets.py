@@ -54,6 +54,7 @@ async def create_cabinet(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CabinetRead:
     cabinet = await crud_cabinet.create(db, body)
+    cabinet = await crud_cabinet.get(db, cabinet.id)  # reload with site relationship
     client_ip = getattr(request.state, "client_ip", None)
     await log_action(db, user_id=current_user.id, action="create", entity_table="cabinet",
                      entity_id=cabinet.id, client_ip=client_ip,
