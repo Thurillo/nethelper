@@ -8,6 +8,7 @@ import { cabinetsApi } from '../api/cabinets'
 import { vendorsApi } from '../api/vendors'
 import { useAuthStore } from '../store/authStore'
 import { useDevices, useDeleteDevice } from '../hooks/useDevices'
+import { useCreateCabinet } from '../hooks/useCabinets'
 import Table, { Column } from '../components/common/Table'
 import Modal from '../components/common/Modal'
 import SearchInput from '../components/common/SearchInput'
@@ -17,9 +18,11 @@ import ConfirmDialog from '../components/common/ConfirmDialog'
 import { DeviceTypeBadge, DeviceStatusBadge } from '../components/common/Badge'
 import { format } from 'date-fns'
 import { it } from 'date-fns/locale'
-import type { Device, DeviceCreate, DeviceType, DeviceStatus, DeviceFilters } from '../types'
+import type { Device, DeviceCreate, DeviceType, DeviceStatus, DeviceFilters, CabinetCreate } from '../types'
 import { checkmkApi } from '../api/checkmk'
 import CheckMKBadge from '../components/common/CheckMKBadge'
+
+const DEVICE_TYPES_WITH_PORTS: DeviceType[] = ['switch', 'router', 'patch_panel', 'phone', 'unmanaged_switch', 'firewall', 'access_point']
 
 // Patch panel are managed via the dedicated Patch Panel section
 const DEVICE_TYPES: DeviceType[] = ['switch', 'router', 'access_point', 'server', 'patch_panel', 'pdu', 'firewall', 'ups', 'unmanaged_switch', 'workstation', 'printer', 'camera', 'phone', 'other']
@@ -38,7 +41,10 @@ const defaultForm: DeviceCreate = {
   asset_tag: null, cabinet_id: null, u_position: null, u_height: 1,
   vendor_id: null, model: null, os_version: null,
   snmp_community: null, snmp_version: 2, ssh_username: null, ssh_password: null, ssh_port: 22, notes: null,
+  port_count: null,
 }
+
+const defaultCabinetForm: CabinetCreate = { name: '', site_id: 0, u_count: 42 }
 
 const DevicesPage: React.FC = () => {
   const navigate = useNavigate()
@@ -53,6 +59,9 @@ const DevicesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Device | null>(null)
   const [colMenuOpen, setColMenuOpen] = useState(false)
+  const [showCabinetModal, setShowCabinetModal] = useState(false)
+  const [cabinetForm, setCabinetForm] = useState<CabinetCreate>(defaultCabinetForm)
+  const [cabinetError, setCabinetError] = useState<string | null>(null)
   const colMenuRef = useRef<HTMLDivElement>(null)
   const [visibleCols, setVisibleCols] = useState<Set<string>>(
     new Set(['name', 'device_type', 'primary_ip', 'mac_address', 'cabinet', 'status', 'vendor', 'model', 'notes', 'last_seen', 'checkmk'])
@@ -74,6 +83,23 @@ const DevicesPage: React.FC = () => {
   const { data: cabinetsData } = useQuery({ queryKey: ['cabinets', 'all'], queryFn: () => cabinetsApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: vendorsData } = useQuery({ queryKey: ['vendors', 'all'], queryFn: () => vendorsApi.list({ size: 100 }), staleTime: 60_000 })
   const { data: checkmkStatus } = useQuery({ queryKey: ['checkmk', 'status'], queryFn: checkmkApi.getStatus, staleTime: 60_000, retry: false })
+
+  const createCabinet = useCreateCabinet()
+
+  const handleCreateCabinet = () => {
+    if (!cabinetForm.name) { setCabinetError('Il nome è obbligatorio'); return }
+    if (!cabinetForm.site_id) { setCabinetError('Seleziona una sede'); return }
+    createCabinet.mutate(cabinetForm, {
+      onSuccess: (newCab) => {
+        qc.invalidateQueries({ queryKey: ['cabinets'], exact: false })
+        setForm((p) => ({ ...p, cabinet_id: newCab.id }))
+        setShowCabinetModal(false)
+        setCabinetForm(defaultCabinetForm)
+        setCabinetError(null)
+      },
+      onError: () => setCabinetError('Errore durante la creazione dell\'armadio'),
+    })
+  }
 
   const createDevice = useMutation({
     mutationFn: (d: DeviceCreate) => devicesApi.create(d),
@@ -344,13 +370,36 @@ const DevicesPage: React.FC = () => {
             {f('Asset tag', 'asset_tag')}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Armadio</label>
-              <select value={form.cabinet_id ?? ''} onChange={(e) => setForm((p) => ({ ...p, cabinet_id: e.target.value ? Number(e.target.value) : null }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
-                <option value="">-- Nessun armadio --</option>
-                {cabinetsData?.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <div className="flex gap-1">
+                <select value={form.cabinet_id ?? ''} onChange={(e) => setForm((p) => ({ ...p, cabinet_id: e.target.value ? Number(e.target.value) : null }))} className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                  <option value="">-- Nessun armadio --</option>
+                  {cabinetsData?.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                {isAdmin() && (
+                  <button type="button" onClick={() => { setCabinetForm(defaultCabinetForm); setCabinetError(null); setShowCabinetModal(true) }}
+                    className="px-2 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600" title="Crea nuovo armadio">
+                    <Plus size={16} />
+                  </button>
+                )}
+              </div>
             </div>
             {f('Posizione U', 'u_position', 'number')}
             {f('Altezza U', 'u_height', 'number')}
+            {!editing && DEVICE_TYPES_WITH_PORTS.includes(form.device_type) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Numero porte</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={512}
+                  value={form.port_count ?? ''}
+                  onChange={(e) => setForm((p) => ({ ...p, port_count: e.target.value ? Number(e.target.value) : null }))}
+                  placeholder="es. 24"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">Crea automaticamente le porte nella tab Interfacce</p>
+              </div>
+            )}
           </div>
           <details className="border border-gray-200 rounded-lg">
             <summary className="px-4 py-3 cursor-pointer text-sm font-medium text-gray-700 hover:bg-gray-50">Configurazione SNMP / SSH</summary>
@@ -374,6 +423,42 @@ const DevicesPage: React.FC = () => {
             <textarea value={form.notes ?? ''} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value || null }))} rows={2} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none" />
           </div>
         </form>
+      </Modal>
+
+      {/* Inline cabinet creation modal */}
+      <Modal isOpen={showCabinetModal} onClose={() => setShowCabinetModal(false)} title="Nuovo armadio" size="sm"
+        footer={
+          <>
+            <button onClick={() => setShowCabinetModal(false)} className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Annulla</button>
+            <button onClick={handleCreateCabinet} disabled={createCabinet.isPending} className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50">
+              {createCabinet.isPending ? 'Salvataggio...' : 'Crea'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {cabinetError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{cabinetError}</p>}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+            <input type="text" value={cabinetForm.name} onChange={(e) => setCabinetForm((p) => ({ ...p, name: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="es. Armadio A1" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sede *</label>
+            <select value={cabinetForm.site_id} onChange={(e) => setCabinetForm((p) => ({ ...p, site_id: Number(e.target.value) }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+              <option value={0}>-- Seleziona sede --</option>
+              {sitesData?.items.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Dimensione (U)</label>
+            <input type="number" min={1} max={100} value={cabinetForm.u_count ?? 42}
+              onChange={(e) => setCabinetForm((p) => ({ ...p, u_count: Number(e.target.value) }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500" />
+          </div>
+        </div>
       </Modal>
 
       <ConfirmDialog

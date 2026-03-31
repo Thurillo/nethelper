@@ -148,7 +148,7 @@ class CRUDDevice(CRUDBase[Device, DeviceCreate, DeviceUpdate]):
 
     async def create(self, db: AsyncSession, obj_in: DeviceCreate) -> Device:
         from datetime import datetime, timezone
-        data = obj_in.model_dump()
+        data = obj_in.model_dump(exclude={'port_count'})
         data = self._encrypt_sensitive_fields(data)
         if data.get('last_seen') is None:
             data['last_seen'] = datetime.now(timezone.utc)

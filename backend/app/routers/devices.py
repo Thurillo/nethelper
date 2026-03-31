@@ -98,10 +98,23 @@ async def create_device(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DeviceRead:
     device = await crud_device.create(db, body)
+
+    if body.port_count:
+        from app.models.interface import Interface, InterfaceType
+        from app.models.device import DeviceType as DType
+        iface_type = (
+            InterfaceType.patch_panel_port
+            if device.device_type == DType.patch_panel
+            else InterfaceType.ethernet
+        )
+        for i in range(1, body.port_count + 1):
+            db.add(Interface(device_id=device.id, name=f"Port {i}", if_type=iface_type))
+        await db.flush()
+
     client_ip = getattr(request.state, "client_ip", None)
     await log_action(db, user_id=current_user.id, action="create", entity_table="device",
                      entity_id=device.id, client_ip=client_ip,
-                     description=f"Created device '{device.name}'.")
+                     description=f"Created device '{device.name}'" + (f" con {body.port_count} porte." if body.port_count else "."))
     return DeviceRead.model_validate(device)
 
 

@@ -228,6 +228,7 @@ export interface DeviceCreate {
   ssh_port?: number
   ssh_key_path?: string | null
   notes?: string | null
+  port_count?: number | null
 }
 
 export interface DeviceBulkCreateItem {

@@ -4,7 +4,7 @@ import ipaddress
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.models.device import DeviceStatus, DeviceType
 from app.models.scan_job import ScanType
@@ -47,6 +47,7 @@ class DeviceCreate(BaseModel):
     ssh_key_path: Optional[str] = None
     ssh_port: Optional[int] = None
     notes: Optional[str] = None
+    port_count: Optional[int] = Field(None, ge=1, le=512)
 
     @field_validator('mac_address', mode='before')
     @classmethod
