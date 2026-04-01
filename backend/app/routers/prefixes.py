@@ -83,6 +83,7 @@ async def create_prefix(
     await log_action(db, user_id=current_user.id, action="create", entity_table="ip_prefix",
                      entity_id=prefix.id, client_ip=client_ip,
                      description=f"Created prefix '{prefix.prefix}'.")
+    prefix = await crud_ip_prefix.get(db, prefix.id)
     return _enrich(prefix, 0)
 
 
@@ -115,6 +116,7 @@ async def update_prefix(
     await log_action(db, user_id=current_user.id, action="update", entity_table="ip_prefix",
                      entity_id=updated.id, client_ip=client_ip,
                      description=f"Updated prefix '{updated.prefix}'.")
+    updated = await crud_ip_prefix.get(db, prefix_id)
     used_map = await crud_ip_prefix.get_used_counts(db, [updated])
     return _enrich(updated, used_map.get(prefix_id, 0))
 
