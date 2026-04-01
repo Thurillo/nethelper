@@ -146,7 +146,7 @@ async def delete_floor_plan(
                      description=f"Deleted floor plan for site '{site.name}'.")
 
 
-@router.get("/{site_id}/cabinets", response_model=list[CabinetRead])
+@router.get("/{site_id}/cabinets", response_model=PaginatedResponse[CabinetRead])
 async def list_site_cabinets(
     site_id: int,
     _: Annotated[object, Depends(get_current_user)],

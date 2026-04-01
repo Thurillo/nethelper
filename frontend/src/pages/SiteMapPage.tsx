@@ -114,6 +114,7 @@ const SiteMapPage: React.FC = () => {
 
   // Initialize positions from cabinet data
   useEffect(() => {
+    if (!cabinets.length) return
     const initial: Record<number, { x: number; y: number }> = {}
     cabinets.forEach((c) => {
       initial[c.id] = { x: c.map_x ?? 50, y: c.map_y ?? 50 }

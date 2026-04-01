@@ -138,7 +138,7 @@ async def link_switch_port(
     from app.schemas.cable import CableCreate
     a_id = min(port_id, body.target_interface_id)
     b_id = max(port_id, body.target_interface_id)
-    cable_in = CableCreate(interface_a_id=a_id, interface_b_id=b_id, cable_type="copper")
+    cable_in = CableCreate(interface_a_id=a_id, interface_b_id=b_id, cable_type="cat6")
     cable = await crud_cable.create(db, cable_in)
 
     client_ip = getattr(request.state, "client_ip", None)

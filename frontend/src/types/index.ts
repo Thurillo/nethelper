@@ -311,7 +311,7 @@ export interface InterfaceCreate {
 // CABLES
 // ============================================================
 
-export type CableType = 'copper' | 'fiber' | 'dac' | 'aoc' | 'other'
+export type CableType = 'cat5e' | 'cat6' | 'cat6a' | 'cat7' | 'fiber_sm' | 'fiber_mm' | 'dac' | 'other'
 
 export interface Cable {
   id: number

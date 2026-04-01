@@ -223,7 +223,7 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, allDevic
         if (connectionType === 'switch' && selectedSwitchPortId) {
           const a = Math.min(firstIfaceId, Number(selectedSwitchPortId))
           const b = Math.max(firstIfaceId, Number(selectedSwitchPortId))
-          await cablesApi.create({ interface_a_id: a, interface_b_id: b, cable_type: 'copper' })
+          await cablesApi.create({ interface_a_id: a, interface_b_id: b, cable_type: 'cat6' })
         }
 
         if (connectionType === 'patch_panel' && selectedPPPortId && selectedPPId) {
