@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import Modal from '../common/Modal'
 import { patchPanelsApi } from '../../api/patchPanels'
 import { devicesApi } from '../../api/devices'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { PatchPortDetail, NetworkInterface, Device } from '../../types'
 
 interface PortEditModalProps {
@@ -42,6 +42,7 @@ const DEVICE_TYPE_OPTIONS = [
 const PortEditModal: React.FC<PortEditModalProps> = ({
   isOpen, onClose, port, deviceId, cabinetId, onSaved,
 }) => {
+  const qc = useQueryClient()
   const [label, setLabel] = useState('')
   const [roomDestination, setRoomDestination] = useState('')
   const [notes, setNotes] = useState('')
@@ -210,6 +211,9 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
         await patchPanelsApi.linkPort(deviceId, portId, newLinkInterfaceId)
       }
 
+      qc.invalidateQueries({ queryKey: ['patch-panel-ports'] })
+      qc.invalidateQueries({ queryKey: ['switch-ports'] })
+      qc.invalidateQueries({ queryKey: ['connections'] })
       onSaved()
       onClose()
     } catch (err: unknown) {
@@ -226,6 +230,9 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
     setError(null)
     try {
       await patchPanelsApi.unlinkPort(deviceId, port.interface.id)
+      qc.invalidateQueries({ queryKey: ['patch-panel-ports'] })
+      qc.invalidateQueries({ queryKey: ['switch-ports'] })
+      qc.invalidateQueries({ queryKey: ['connections'] })
       onSaved()
       onClose()
     } catch {

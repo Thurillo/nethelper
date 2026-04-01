@@ -509,6 +509,8 @@ const SwitchExpanded: React.FC<{
         onSaved={() => {
           refetch()
           queryClient.invalidateQueries({ queryKey: ['switch-ports', deviceId] })
+          queryClient.invalidateQueries({ queryKey: ['patch-panel-ports'] })
+          queryClient.invalidateQueries({ queryKey: ['connections'] })
           setEditingPort(null)
         }}
       />

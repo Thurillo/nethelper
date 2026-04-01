@@ -195,6 +195,8 @@ const ConnectionsPage: React.FC = () => {
                       if (path.cable_ab_id) await cablesApi.delete(path.cable_ab_id)
                       if (path.cable_bc_id) await cablesApi.delete(path.cable_bc_id)
                       qc.invalidateQueries({ queryKey: ['connections'] })
+                      qc.invalidateQueries({ queryKey: ['switch-ports'] })
+                      qc.invalidateQueries({ queryKey: ['patch-panel-ports'] })
                     } : undefined}
                   />
                 ))}
