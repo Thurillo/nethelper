@@ -214,6 +214,7 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
       qc.invalidateQueries({ queryKey: ['patch-panel-ports'] })
       qc.invalidateQueries({ queryKey: ['switch-ports'] })
       qc.invalidateQueries({ queryKey: ['connections'] })
+      qc.invalidateQueries({ queryKey: ['devices'] })
       onSaved()
       onClose()
     } catch (err: unknown) {
@@ -233,6 +234,7 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
       qc.invalidateQueries({ queryKey: ['patch-panel-ports'] })
       qc.invalidateQueries({ queryKey: ['switch-ports'] })
       qc.invalidateQueries({ queryKey: ['connections'] })
+      qc.invalidateQueries({ queryKey: ['devices'] })
       onSaved()
       onClose()
     } catch {

@@ -511,6 +511,7 @@ const SwitchExpanded: React.FC<{
           queryClient.invalidateQueries({ queryKey: ['switch-ports', deviceId] })
           queryClient.invalidateQueries({ queryKey: ['patch-panel-ports'] })
           queryClient.invalidateQueries({ queryKey: ['connections'] })
+          queryClient.invalidateQueries({ queryKey: ['devices'] })
           setEditingPort(null)
         }}
       />

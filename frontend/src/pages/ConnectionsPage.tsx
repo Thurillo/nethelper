@@ -197,6 +197,7 @@ const ConnectionsPage: React.FC = () => {
                       qc.invalidateQueries({ queryKey: ['connections'] })
                       qc.invalidateQueries({ queryKey: ['switch-ports'] })
                       qc.invalidateQueries({ queryKey: ['patch-panel-ports'] })
+                      qc.invalidateQueries({ queryKey: ['devices'] })
                     } : undefined}
                   />
                 ))}
