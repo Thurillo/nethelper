@@ -137,55 +137,53 @@ async def import_backup(
     tables: dict[str, list] = payload["tables"]
     restored: dict[str, int] = {}
 
-    # Use a raw connection for the transaction so we can run DDL-like statements
-    async with db.begin():
-        # Truncate in REVERSE export order
-        for table in reversed(EXPORT_TABLES):
-            if table not in tables:
-                continue
-            try:
-                await db.execute(
-                    text(f'TRUNCATE "{table}" RESTART IDENTITY CASCADE')
-                )
-            except Exception as exc:
-                logger.warning("Skipping TRUNCATE for table '%s': %s", table, exc)
+    # Truncate in REVERSE export order
+    for table in reversed(EXPORT_TABLES):
+        if table not in tables:
+            continue
+        try:
+            await db.execute(
+                text(f'TRUNCATE "{table}" RESTART IDENTITY CASCADE')
+            )
+        except Exception as exc:
+            logger.warning("Skipping TRUNCATE for table '%s': %s", table, exc)
 
-        # Insert in FORWARD order
-        for table in EXPORT_TABLES:
-            rows = tables.get(table)
-            if not rows:
-                restored[table] = 0
-                continue
+    # Insert in FORWARD order
+    for table in EXPORT_TABLES:
+        rows = tables.get(table)
+        if not rows:
+            restored[table] = 0
+            continue
 
-            try:
-                cols = list(rows[0].keys())
-                col_list = ", ".join(f'"{c}"' for c in cols)
-                placeholders = ", ".join(f":{c}" for c in cols)
-                insert_sql = text(
-                    f'INSERT INTO "{table}" ({col_list}) VALUES ({placeholders})'
-                )
-                for row in rows:
-                    await db.execute(insert_sql, row)
-                restored[table] = len(rows)
-            except Exception as exc:
-                logger.warning(
-                    "Skipping INSERT for table '%s': %s", table, exc
-                )
-                restored[table] = 0
+        try:
+            cols = list(rows[0].keys())
+            col_list = ", ".join(f'"{c}"' for c in cols)
+            placeholders = ", ".join(f":{c}" for c in cols)
+            insert_sql = text(
+                f'INSERT INTO "{table}" ({col_list}) VALUES ({placeholders})'
+            )
+            for row in rows:
+                await db.execute(insert_sql, row)
+            restored[table] = len(rows)
+        except Exception as exc:
+            logger.warning(
+                "Skipping INSERT for table '%s': %s", table, exc
+            )
+            restored[table] = 0
 
-        # Reset sequences
-        for table in EXPORT_TABLES:
-            try:
-                await db.execute(
-                    text(
-                        f"SELECT setval('\"{table}_id_seq\"',"
-                        f" COALESCE(MAX(id), 0) + 1, false) FROM \"{table}\""
-                    )
+    # Reset sequences
+    for table in EXPORT_TABLES:
+        try:
+            await db.execute(
+                text(
+                    f"SELECT setval('\"{table}_id_seq\"',"
+                    f" COALESCE(MAX(id), 0) + 1, false) FROM \"{table}\""
                 )
-            except Exception as exc:
-                logger.debug(
-                    "Could not reset sequence for '%s': %s", table, exc
-                )
+            )
+        except Exception as exc:
+            logger.debug(
+                "Could not reset sequence for '%s': %s", table, exc
+            )
 
     return {"restored": restored}
 
@@ -208,14 +206,13 @@ async def reset_data(
         tables_to_clear = tables_to_clear + list(FULL_EXTRA_TABLES)
 
     cleared: list[str] = []
-    async with db.begin():
-        for table in tables_to_clear:
-            try:
-                await db.execute(
-                    text(f'TRUNCATE "{table}" RESTART IDENTITY CASCADE')
-                )
-                cleared.append(table)
-            except Exception as exc:
-                logger.warning("Skipping TRUNCATE for table '%s': %s", table, exc)
+    for table in tables_to_clear:
+        try:
+            await db.execute(
+                text(f'TRUNCATE "{table}" RESTART IDENTITY CASCADE')
+            )
+            cleared.append(table)
+        except Exception as exc:
+            logger.warning("Skipping TRUNCATE for table '%s': %s", table, exc)
 
     return {"reset": scope, "tables_cleared": cleared}
