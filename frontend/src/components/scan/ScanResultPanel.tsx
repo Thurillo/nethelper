@@ -12,7 +12,9 @@ import { patchPanelsApi } from '../../api/patchPanels'
 import { conflictsApi } from '../../api/conflicts'
 import StatusDot from '../common/StatusDot'
 import QuickAddVendorModal from '../common/QuickAddVendorModal'
-import type { ScanJob, NetworkInterface, PatchPortDetail, Device } from '../../types'
+import type { ScanJob, NetworkInterface, PatchPortDetail, Device, InterfaceType } from '../../types'
+
+const DEFAULT_IF_TYPE: InterfaceType = 'ethernet'
 
 interface FoundHost {
   ip: string
@@ -187,7 +189,7 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, allDevic
           const iface = await interfacesApi.create({
             device_id: device.id,
             name: `Port ${i}`,
-            if_type: 'ethernet',
+            if_type: DEFAULT_IF_TYPE,
             mac_address: i === 1 ? (host.mac || null) : null,
           })
           if (i === 1) firstIfaceId = iface.id
@@ -197,14 +199,14 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, allDevic
         const iface = await interfacesApi.create({
           device_id: device.id,
           name: 'eth0',
-          if_type: 'ethernet',
+          if_type: DEFAULT_IF_TYPE,
           mac_address: host.mac || null,
         })
         firstIfaceId = iface.id
         await interfacesApi.create({
           device_id: device.id,
           name: 'eth1-passthrough',
-          if_type: 'ethernet',
+          if_type: DEFAULT_IF_TYPE,
         })
       }
 
@@ -214,7 +216,7 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, allDevic
           const iface = await interfacesApi.create({
             device_id: device.id,
             name: 'eth0',
-            if_type: 'ethernet',
+            if_type: DEFAULT_IF_TYPE,
             mac_address: host.mac || null,
           })
           firstIfaceId = iface.id
@@ -234,7 +236,7 @@ const AddDeviceModal: React.FC<AddDeviceModalProps> = ({ host, vendors, allDevic
         await interfacesApi.create({
           device_id: device.id,
           name: 'eth0',
-          if_type: 'ethernet',
+          if_type: DEFAULT_IF_TYPE,
           mac_address: host.mac || null,
         })
       }
