@@ -3,12 +3,16 @@ from __future__ import annotations
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.crud.audit_log import log_action
 from app.crud.ip_address import crud_ip_address
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
+from app.models.device import Device
+from app.models.ip_address import IpAddress
 from app.schemas.ip_address import IpAddressCreate, IpAddressRead, IpAddressUpdate
 from app.schemas.pagination import PaginatedResponse
 
@@ -49,7 +53,16 @@ async def create_ip_address(
     await log_action(db, user_id=current_user.id, action="create", entity_table="ip_address",
                      entity_id=ip.id, client_ip=client_ip,
                      description=f"Created IP address '{ip.address}'.")
-    return IpAddressRead.model_validate(ip)
+    # Reload with selectinload to avoid MissingGreenlet on device relationship
+    result = await db.execute(
+        select(IpAddress)
+        .options(
+            selectinload(IpAddress.device).selectinload(Device.vendor),
+            selectinload(IpAddress.device).selectinload(Device.site),
+        )
+        .where(IpAddress.id == ip.id)
+    )
+    return IpAddressRead.model_validate(result.scalar_one())
 
 
 @router.get("/{ip_id}", response_model=IpAddressRead)
@@ -58,7 +71,15 @@ async def get_ip_address(
     _: Annotated[object, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> IpAddressRead:
-    ip = await crud_ip_address.get(db, ip_id)
+    result = await db.execute(
+        select(IpAddress)
+        .options(
+            selectinload(IpAddress.device).selectinload(Device.vendor),
+            selectinload(IpAddress.device).selectinload(Device.site),
+        )
+        .where(IpAddress.id == ip_id)
+    )
+    ip = result.scalar_one_or_none()
     if ip is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IP address not found.")
     return IpAddressRead.model_validate(ip)
@@ -80,7 +101,17 @@ async def update_ip_address(
     await log_action(db, user_id=current_user.id, action="update", entity_table="ip_address",
                      entity_id=updated.id, client_ip=client_ip,
                      description=f"Updated IP address '{updated.address}'.")
-    return IpAddressRead.model_validate(updated)
+    # Reload with selectinload to avoid MissingGreenlet on device relationship
+    result = await db.execute(
+        select(IpAddress)
+        .options(
+            selectinload(IpAddress.device).selectinload(Device.vendor),
+            selectinload(IpAddress.device).selectinload(Device.site),
+        )
+        .where(IpAddress.id == ip_id)
+    )
+    ip_reloaded = result.scalar_one()
+    return IpAddressRead.model_validate(ip_reloaded)
 
 
 @router.delete("/{ip_id}", status_code=status.HTTP_204_NO_CONTENT)
