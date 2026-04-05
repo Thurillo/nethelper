@@ -86,6 +86,29 @@ class CRUDCabinet(CRUDBase[Cabinet, CabinetCreate, CabinetUpdate]):
         )
         return list(result.scalars().all())
 
+    async def find_next_free_u(
+        self, db: AsyncSession, cabinet_id: int, u_height: int = 1
+    ) -> int | None:
+        """Return the lowest U position with enough consecutive free slots, or None if full."""
+        cabinet = await self.get(db, cabinet_id)
+        if cabinet is None:
+            return None
+
+        devices = await self.get_devices_in_cabinet(db, cabinet_id)
+
+        # Build set of occupied U positions
+        occupied: set[int] = set()
+        for device in devices:
+            if device.u_position is not None:
+                for u in range(device.u_position, device.u_position + (device.u_height or 1)):
+                    occupied.add(u)
+
+        # Find first run of `u_height` consecutive free slots
+        for u in range(1, cabinet.u_count + 1):
+            if all((u + i) not in occupied and (u + i) <= cabinet.u_count for i in range(u_height)):
+                return u
+        return None
+
     async def get_rack_diagram(self, db: AsyncSession, cabinet_id: int) -> RackDiagram | None:
         cabinet = await self.get(db, cabinet_id)
         if cabinet is None:

@@ -8,6 +8,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.audit_log import log_action
+from app.crud.cabinet import crud_cabinet
 from app.crud.cable import crud_cable
 from app.crud.device import crud_device
 from app.crud.interface import crud_interface
@@ -110,6 +111,11 @@ async def create_device(
     current_user: Annotated[object, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DeviceRead:
+    # Auto-assign u_position if cabinet_id is set but u_position is not provided
+    if body.cabinet_id and body.u_position is None:
+        free_u = await crud_cabinet.find_next_free_u(db, body.cabinet_id, u_height=body.u_height or 1)
+        if free_u is not None:
+            body = body.model_copy(update={"u_position": free_u})
     device = await crud_device.create(db, body)
 
     if body.port_count:
@@ -222,6 +228,12 @@ async def update_device(
     device = await crud_device.get(db, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
+    # Auto-assign u_position when cabinet changes and no explicit position is given
+    target_cabinet = body.cabinet_id if body.cabinet_id is not None else device.cabinet_id
+    if target_cabinet and body.u_position is None and device.u_position is None:
+        free_u = await crud_cabinet.find_next_free_u(db, target_cabinet, u_height=body.u_height or device.u_height or 1)
+        if free_u is not None:
+            body = body.model_copy(update={"u_position": free_u})
     updated = await crud_device.update(db, device, body)
     client_ip = getattr(request.state, "client_ip", None)
     await log_action(db, user_id=current_user.id, action="update", entity_table="device",
