@@ -227,9 +227,89 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
             return {"status": "failed", "error": str(exc)}
 
 
+def _nmap_host_discovery(start_ip: str, end_ip: str) -> list[dict]:
+    """
+    Use nmap ARP ping (-sn -PR) for reliable L2 host discovery.
+    Falls back to ICMP+TCP if nmap is unavailable.
+    Returns list of dicts: {ip, mac, vendor, hostname, open_ports}.
+    """
+    import shutil, xml.etree.ElementTree as ET
+
+    target = f"{start_ip}-{end_ip.split('.')[-1]}"
+    # Use the last octet range: nmap accepts "192.168.1.1-254"
+    # Full range notation
+    parts_start = start_ip.split(".")
+    parts_end   = end_ip.split(".")
+    if parts_start[:3] == parts_end[:3]:
+        target = f"{'.'.join(parts_start[:3])}.{parts_start[3]}-{parts_end[3]}"
+    else:
+        target = f"{start_ip} {end_ip}"  # fallback: let nmap handle it
+
+    nmap_bin = shutil.which("nmap")
+    if not nmap_bin:
+        return []
+
+    try:
+        result = subprocess.run(
+            [
+                nmap_bin, "-sn",          # ping scan (host discovery only)
+                "-T4",                     # aggressive timing
+                "--min-parallelism", "100",
+                "--min-rate", "300",
+                "-oX", "-",               # XML output to stdout
+                target,
+            ],
+            capture_output=True, text=True, timeout=300
+        )
+        if result.returncode not in (0, 1):  # 1 = some hosts down, still ok
+            return []
+
+        hosts = []
+        root = ET.fromstring(result.stdout)
+        for host_el in root.findall("host"):
+            status = host_el.find("status")
+            if status is None or status.get("state") != "up":
+                continue
+
+            ip = None
+            mac = None
+            vendor = None
+            for addr in host_el.findall("address"):
+                if addr.get("addrtype") == "ipv4":
+                    ip = addr.get("addr")
+                elif addr.get("addrtype") == "mac":
+                    mac = addr.get("addr", "").lower()
+                    vendor = addr.get("vendor")
+
+            if not ip:
+                continue
+
+            hostname = None
+            hostnames_el = host_el.find("hostnames")
+            if hostnames_el is not None:
+                for hn in hostnames_el.findall("hostname"):
+                    name = hn.get("name", "")
+                    if name and not name.replace(".", "").isdigit():
+                        hostname = name
+                        break
+
+            hosts.append({
+                "ip": ip,
+                "mac": mac,
+                "vendor": vendor or "",
+                "hostname": hostname,
+                "open_ports": [],
+                "ping": True,
+            })
+
+        return hosts
+    except Exception:
+        return []
+
+
 @celery_app.task(bind=True, time_limit=1800, soft_time_limit=1740)
 def run_ip_range_scan(self, scan_job_id: int) -> dict:
-    """Scan an IP range for live hosts using TCP + ICMP in parallel."""
+    """Scan an IP range for live hosts: nmap ARP primary, TCP+ICMP fallback."""
 
     async def _run():
         from app.database import get_async_session
@@ -244,8 +324,10 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
             await crud_scan_job.update_status(db, scan_job_id, ScanStatus.running)
 
             start_ip = job.range_start_ip
-            end_ip = job.range_end_ip
-            ports: list[int] = job.range_ports if job.range_ports is not None else [22, 80, 443, 8080]
+            end_ip   = job.range_end_ip
+            ports: list[int] = job.range_ports if job.range_ports else [
+                22, 23, 80, 443, 445, 8080, 8443, 8888, 9100, 5000, 5001, 7547
+            ]
 
             if not start_ip or not end_ip:
                 await crud_scan_job.update_status(
@@ -254,13 +336,12 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
                 )
                 return {"status": "failed"}
 
-            # Expand IP range
+            # Count total IPs
             try:
                 ip_list: list[str] = []
                 for net in summarize_address_range(parse_ip(start_ip), parse_ip(end_ip)):
                     for host in net.hosts():
                         ip_list.append(str(host))
-                # Also include start/end if they ended up as network/broadcast (edge case)
                 if not ip_list:
                     ip_list = [start_ip] if start_ip == end_ip else []
             except Exception as exc:
@@ -271,79 +352,100 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
 
             await crud_scan_job.append_log(
                 db, scan_job_id,
-                f"Scanning {len(ip_list)} IPs ({start_ip} → {end_ip}) | Porte: {ports}"
+                f"Scansione {len(ip_list)} IP ({start_ip} → {end_ip}) | nmap ARP + TCP"
             )
 
-            # Scan all IPs concurrently in batches of 50
-            found_hosts: list[dict] = []
-            batch_size = 50
+            # ── Phase 1: nmap ARP host discovery (primary, fastest) ──
+            loop = asyncio.get_event_loop()
+            found_hosts: list[dict] = await loop.run_in_executor(
+                None, _nmap_host_discovery, start_ip, end_ip
+            )
 
-            async def scan_one(ip: str) -> dict | None:
-                """Returns host info if alive, else None."""
-                tcp_tasks = [_tcp_check(ip, p, timeout=1.5) for p in ports]
-                ping_task = _ping(ip)
-                results = await asyncio.gather(ping_task, *tcp_tasks, return_exceptions=True)
+            await crud_scan_job.append_log(
+                db, scan_job_id,
+                f"nmap ARP: {len(found_hosts)} host trovati"
+            )
 
-                ping_alive = results[0] is True
-                tcp_results = results[1:]
-                open_ports = [p for p, ok in zip(ports, tcp_results) if ok is True]
+            # ── Phase 2: TCP port check on alive hosts (parallel) ──
+            async def enrich_host(h: dict) -> dict:
+                ip = h["ip"]
+                tcp_tasks = [_tcp_check(ip, p, timeout=1.2) for p in ports]
+                results = await asyncio.gather(*tcp_tasks, return_exceptions=True)
+                h["open_ports"] = [p for p, ok in zip(ports, results) if ok is True]
+                if not h.get("hostname"):
+                    h["hostname"] = await _reverse_dns(ip)
+                # Enrich MAC from ARP table if nmap didn't get it
+                if not h.get("mac"):
+                    h["mac"] = await loop.run_in_executor(None, _arp_mac, ip)
+                return h
 
-                if not ping_alive and not open_ports:
+            batch_size = 60
+            enriched: list[dict] = []
+            for i in range(0, len(found_hosts), batch_size):
+                batch = found_hosts[i:i + batch_size]
+                batch_results = await asyncio.gather(*[enrich_host(h) for h in batch])
+                enriched.extend(batch_results)
+
+            # ── Phase 3: TCP-only sweep for IPs nmap may have missed ──
+            #    (hosts that block ICMP/ARP but respond on TCP ports)
+            found_ips = {h["ip"] for h in enriched}
+            missed_ips = [ip for ip in ip_list if ip not in found_ips]
+
+            async def tcp_probe(ip: str) -> dict | None:
+                tcp_tasks = [_tcp_check(ip, p, timeout=0.8) for p in [80, 443, 22, 445, 8080]]
+                results = await asyncio.gather(*tcp_tasks, return_exceptions=True)
+                open_ports = [p for p, ok in zip([80, 443, 22, 445, 8080], results) if ok is True]
+                if not open_ports:
                     return None
-
-                # After TCP connect, kernel ARP table should have the MAC
-                loop = asyncio.get_event_loop()
                 mac = await loop.run_in_executor(None, _arp_mac, ip)
-                vendor = await loop.run_in_executor(None, _vendor_from_mac, mac) if mac else None
                 hostname = await _reverse_dns(ip)
+                return {"ip": ip, "mac": mac, "vendor": "", "hostname": hostname,
+                        "open_ports": open_ports, "ping": False}
 
-                return {
-                    "ip": ip,
-                    "open_ports": open_ports,
-                    "hostname": hostname,
-                    "ping": ping_alive,
-                    "mac": mac,
-                    "vendor": vendor,
-                }
+            for i in range(0, len(missed_ips), batch_size):
+                batch = missed_ips[i:i + batch_size]
+                batch_results = await asyncio.gather(*[tcp_probe(ip) for ip in batch])
+                for r in batch_results:
+                    if r:
+                        enriched.append(r)
 
-            for i in range(0, len(ip_list), batch_size):
-                batch = ip_list[i:i + batch_size]
-                batch_results = await asyncio.gather(*[scan_one(ip) for ip in batch])
-                for result in batch_results:
-                    if result is not None:
-                        found_hosts.append(result)
-                        ports_str = ", ".join(str(p) for p in result["open_ports"]) or "—"
-                        hn = result["hostname"] or ""
-                        mac_str = f"  MAC: {result['mac']}" if result.get("mac") else ""
-                        vendor_str = f" ({result['vendor']})" if result.get("vendor") else ""
-                        ping_str = " [ping ok]" if result["ping"] else ""
-                        await crud_scan_job.append_log(
-                            db, scan_job_id,
-                            f"✓ {result['ip']}{('  ' + hn) if hn else ''}{mac_str}{vendor_str}  porte: {ports_str}{ping_str}"
-                        )
+            # Sort by IP
+            enriched.sort(key=lambda h: list(map(int, h["ip"].split("."))))
 
-            if not found_hosts:
-                await crud_scan_job.append_log(db, scan_job_id, "Nessun host raggiungibile trovato.")
+            # Log results
+            for h in enriched:
+                ports_str = ", ".join(str(p) for p in h["open_ports"]) if h["open_ports"] else "—"
+                mac_str    = f"  MAC: {h['mac']}"    if h.get("mac")      else ""
+                vendor_str = f" ({h['vendor']})"     if h.get("vendor")   else ""
+                hn_str     = f"  {h['hostname']}"    if h.get("hostname") else ""
+                await crud_scan_job.append_log(
+                    db, scan_job_id,
+                    f"✓ {h['ip']}{hn_str}{mac_str}{vendor_str}  porte: {ports_str}"
+                )
 
-            # Update IpAddress records
+            if not enriched:
+                await crud_scan_job.append_log(db, scan_job_id, "Nessun host trovato.")
+
+            # ── Persist IpAddress records ──
             from app.models.ip_address import IpAddress, IpAddressSource
             from sqlalchemy import select as sa_select
-            for h in found_hosts:
-                existing = await db.execute(sa_select(IpAddress).where(IpAddress.address == h["ip"]))
+            for h in enriched:
+                existing = await db.execute(
+                    sa_select(IpAddress).where(IpAddress.address == h["ip"])
+                )
                 if existing.scalar_one_or_none() is None:
-                    ip_obj = IpAddress(
+                    db.add(IpAddress(
                         address=h["ip"],
                         dns_name=h.get("hostname"),
                         source=IpAddressSource.ip_range_scan,
                         description=f"Scoperto dalla scansione #{scan_job_id}",
-                    )
-                    db.add(ip_obj)
+                    ))
             await db.flush()
 
             summary = {
                 "total_ips": len(ip_list),
-                "alive_hosts": len(found_hosts),
-                "found_hosts": found_hosts,
+                "alive_hosts": len(enriched),
+                "found_hosts": enriched,
             }
             job = await crud_scan_job.get(db, scan_job_id)
             if job:
@@ -352,7 +454,7 @@ def run_ip_range_scan(self, scan_job_id: int) -> dict:
             await crud_scan_job.update_status(db, scan_job_id, ScanStatus.completed)
             await crud_scan_job.append_log(
                 db, scan_job_id,
-                f"Scansione completata: {len(found_hosts)}/{len(ip_list)} host attivi."
+                f"Scansione completata: {len(enriched)}/{len(ip_list)} host attivi."
             )
             return {"status": "completed", "summary": summary}
 

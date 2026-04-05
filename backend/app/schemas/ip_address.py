@@ -17,8 +17,6 @@ class IpAddressCreate(BaseModel):
     dns_name: Optional[str] = None
     description: Optional[str] = None
     source: IpAddressSource = IpAddressSource.manual
-    notes: Optional[str] = None
-    status: Optional[str] = None
 
 
 class IpAddressUpdate(BaseModel):
