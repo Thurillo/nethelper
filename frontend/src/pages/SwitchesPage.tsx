@@ -3,13 +3,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronDown, ChevronUp, Edit2, Link, Network, Plus, Server } from 'lucide-react'
 import { devicesApi } from '../api/devices'
-import { interfacesApi } from '../api/interfaces'
 import { switchesApi, type SwitchPortUpdateBody } from '../api/switches'
 import { vlansApi } from '../api/vlans'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import EmptyState from '../components/common/EmptyState'
 import QuickAddVendorModal from '../components/common/QuickAddVendorModal'
-import type { Device, SwitchPortDetail, NetworkInterface } from '../types'
+import { PortOptionGroups } from '../utils/portOptions'
+import type { Device, SwitchPortDetail, DevicePortDetail } from '../types'
 
 // ─── Port dot ────────────────────────────────────────────────────────────────
 
@@ -78,14 +78,11 @@ const SwitchPortEditModal: React.FC<{
     staleTime: 60_000,
   })
 
-  const { data: targetDeviceIfaces } = useQuery<NetworkInterface[]>({
-    queryKey: ['ifaces-for-link', targetDeviceId],
-    queryFn: async () => {
-      const res = await interfacesApi.list({ device_id: targetDeviceId as number, size: 200 })
-      return res.items
-    },
+  const { data: targetDevicePorts } = useQuery<DevicePortDetail[]>({
+    queryKey: ['device-ports', targetDeviceId],
+    queryFn: () => devicesApi.getPorts(targetDeviceId as number),
     enabled: isOpen && !!targetDeviceId,
-    staleTime: 30_000,
+    staleTime: 10_000,
   })
 
   const { data: vlans } = useQuery({
@@ -291,11 +288,10 @@ const SwitchPortEditModal: React.FC<{
                       className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none bg-white"
                     >
                       <option value="">— seleziona interfaccia —</option>
-                      {(targetDeviceIfaces ?? []).map(i => (
-                        <option key={i.id} value={i.id}>
-                          {i.name}{i.label ? ` — ${i.label}` : ''}
-                        </option>
-                      ))}
+                      <PortOptionGroups
+                        ports={targetDevicePorts ?? []}
+                        currentPortId={port.linked_interface?.id}
+                      />
                     </select>
                   </div>
                 )}

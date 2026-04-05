@@ -95,6 +95,35 @@ async def create_cable(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Both ends of a cable must be different interfaces.",
         )
+    # Check that neither interface is already connected to any other cable
+    from app.models.interface import Interface as IfaceModel
+    from sqlalchemy import or_
+    existing = await db.execute(
+        select(Cable).where(
+            or_(
+                Cable.interface_a_id == body.interface_a_id,
+                Cable.interface_b_id == body.interface_a_id,
+                Cable.interface_a_id == body.interface_b_id,
+                Cable.interface_b_id == body.interface_b_id,
+            )
+        )
+    )
+    conflict = existing.scalars().first()
+    if conflict:
+        # Find which interface is the conflict
+        busy_ids = {conflict.interface_a_id, conflict.interface_b_id}
+        req_ids  = {body.interface_a_id, body.interface_b_id}
+        occupied = busy_ids & req_ids
+        iface_id = next(iter(occupied))
+        res = await db.execute(
+            select(IfaceModel).where(IfaceModel.id == iface_id)
+        )
+        iface = res.scalar_one_or_none()
+        name = iface.name if iface else f"id={iface_id}"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Interfaccia '{name}' è già collegata a un altro cavo.",
+        )
     cable = await crud_cable.create(db, body)
     client_ip = getattr(request.state, "client_ip", None)
     await log_action(db, user_id=current_user.id, action="create", entity_table="cable",

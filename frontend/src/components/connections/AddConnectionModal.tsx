@@ -5,8 +5,8 @@ import { devicesApi } from '../../api/devices'
 import { switchesApi } from '../../api/switches'
 import { patchPanelsApi } from '../../api/patchPanels'
 import { cablesApi } from '../../api/cables'
+import { PortOptionGroups } from '../../utils/portOptions'
 import type { ConnectionPath } from '../../api/connections'
-import type { InterfaceMinimal } from '../../types'
 
 type Mode = 'direct' | 'via_pp'
 
@@ -29,13 +29,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       <div className="flex-1 h-px bg-primary-100" />
     </div>
   )
-}
-
-/** Formatta l'etichetta di una porta occupata mostrando a cosa è collegata */
-function occupiedLabel(portName: string, linked: InterfaceMinimal, label?: string | null): string {
-  const base = label ? `${portName} — ${label}` : portName
-  const dest = linked.device_name ? `${linked.device_name} / ${linked.name}` : linked.name
-  return `${base}  [→ ${dest}]`
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -131,49 +124,6 @@ const AddConnectionModal: React.FC<Props> = ({ isOpen, onClose, editing }) => {
     staleTime: 10_000,
   })
 
-  // ── Port grouping helpers ─────────────────────────────────────────────────
-  //
-  // "Libera" = nessun linked_interface, OPPURE è la porta attualmente
-  //            selezionata per questa connessione (in modifica).
-  // "In uso" = tutte le altre porte già collegate.
-
-  /** Porta lato dispositivo (A) */
-  const devicePortsFree = (devicePorts ?? []).filter(p =>
-    !p.linked_interface || p.interface.id === ifaceAId
-  )
-  const devicePortsOccupied = (devicePorts ?? []).filter(p =>
-    p.linked_interface && p.interface.id !== ifaceAId
-  )
-
-  /** Porte switch (C) */
-  const switchPortsFree = (switchPorts ?? []).filter(p =>
-    !p.linked_interface || p.interface.id === ifaceCId
-  )
-  const switchPortsOccupied = (switchPorts ?? []).filter(p =>
-    p.linked_interface && p.interface.id !== ifaceCId
-  )
-
-  /** Porte PP lato dispositivo (B-dev) — escludi la porta già usata come lato-sw */
-  const ppPortsFreeDevSide = (ppPorts ?? []).filter(p =>
-    (!p.linked_interface || p.interface.id === ppIfaceDevSide) &&
-    p.interface.id !== ppIfaceSwSide
-  )
-  const ppPortsOccupiedDevSide = (ppPorts ?? []).filter(p =>
-    p.linked_interface &&
-    p.interface.id !== ppIfaceDevSide &&
-    p.interface.id !== ppIfaceSwSide
-  )
-
-  /** Porte PP lato switch (B-sw) — escludi la porta già usata come lato-dev */
-  const ppPortsFreeSwSide = (ppPorts ?? []).filter(p =>
-    (!p.linked_interface || p.interface.id === ppIfaceSwSide) &&
-    p.interface.id !== ppIfaceDevSide
-  )
-  const ppPortsOccupiedSwSide = (ppPorts ?? []).filter(p =>
-    p.linked_interface &&
-    p.interface.id !== ppIfaceSwSide &&
-    p.interface.id !== ppIfaceDevSide
-  )
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const save = useMutation({
@@ -265,28 +215,9 @@ const AddConnectionModal: React.FC<Props> = ({ isOpen, onClose, editing }) => {
             <label className={lbl}>Interfaccia</label>
             <select value={ifaceAId} onChange={e => setIfaceAId(e.target.value ? Number(e.target.value) : '')} disabled={!deviceId} className={sel}>
               <option value="">— seleziona —</option>
-              {devicePorts ? (
-                <>
-                  {devicePortsFree.length > 0 && (
-                    <optgroup label="── Libere">
-                      {devicePortsFree.map(p => (
-                        <option key={p.interface.id} value={p.interface.id}>
-                          {p.interface.name}{p.interface.label ? ` — ${p.interface.label}` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {devicePortsOccupied.length > 0 && (
-                    <optgroup label="── In uso">
-                      {devicePortsOccupied.map(p => (
-                        <option key={p.interface.id} value={p.interface.id}>
-                          {occupiedLabel(p.interface.name, p.linked_interface!, p.interface.label)}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </>
-              ) : null}
+              {devicePorts && (
+                <PortOptionGroups ports={devicePorts} currentPortId={ifaceAId} />
+              )}
             </select>
           </div>
         </div>
@@ -310,35 +241,14 @@ const AddConnectionModal: React.FC<Props> = ({ isOpen, onClose, editing }) => {
                 <select value={ppIfaceDevSide} onChange={e => setPpIfaceDevSide(e.target.value ? Number(e.target.value) : '')} disabled={!ppId} className={sel}>
                   <option value="">— seleziona —</option>
                   {ppPorts && (
-                    <>
-                      {ppPortsFreeDevSide.length > 0 && (
-                        <optgroup label="── Libere">
-                          {ppPortsFreeDevSide.map(p => {
-                            const m = p.interface.name.match(/(\d+)$/)
-                            const num = m ? m[1] : p.interface.name
-                            return (
-                              <option key={p.interface.id} value={p.interface.id}>
-                                Porta {num}{p.interface.label ? ` — ${p.interface.label}` : ''}
-                              </option>
-                            )
-                          })}
-                        </optgroup>
-                      )}
-                      {ppPortsOccupiedDevSide.length > 0 && (
-                        <optgroup label="── In uso">
-                          {ppPortsOccupiedDevSide.map(p => {
-                            const m = p.interface.name.match(/(\d+)$/)
-                            const num = m ? m[1] : p.interface.name
-                            const portName = `Porta ${num}`
-                            return (
-                              <option key={p.interface.id} value={p.interface.id}>
-                                {occupiedLabel(portName, p.linked_interface!, p.interface.label)}
-                              </option>
-                            )
-                          })}
-                        </optgroup>
-                      )}
-                    </>
+                    <PortOptionGroups
+                      ports={ppPorts.filter(p => p.interface.id !== ppIfaceSwSide)}
+                      currentPortId={ppIfaceDevSide}
+                      labelFn={p => {
+                        const m = p.interface.name.match(/(\d+)$/)
+                        return `Porta ${m ? m[1] : p.interface.name}${p.interface.label ? ` — ${p.interface.label}` : ''}`
+                      }}
+                    />
                   )}
                 </select>
               </div>
@@ -347,35 +257,14 @@ const AddConnectionModal: React.FC<Props> = ({ isOpen, onClose, editing }) => {
                 <select value={ppIfaceSwSide} onChange={e => setPpIfaceSwSide(e.target.value ? Number(e.target.value) : '')} disabled={!ppId} className={sel}>
                   <option value="">— seleziona —</option>
                   {ppPorts && (
-                    <>
-                      {ppPortsFreeSwSide.length > 0 && (
-                        <optgroup label="── Libere">
-                          {ppPortsFreeSwSide.map(p => {
-                            const m = p.interface.name.match(/(\d+)$/)
-                            const num = m ? m[1] : p.interface.name
-                            return (
-                              <option key={p.interface.id} value={p.interface.id}>
-                                Porta {num}{p.interface.label ? ` — ${p.interface.label}` : ''}
-                              </option>
-                            )
-                          })}
-                        </optgroup>
-                      )}
-                      {ppPortsOccupiedSwSide.length > 0 && (
-                        <optgroup label="── In uso">
-                          {ppPortsOccupiedSwSide.map(p => {
-                            const m = p.interface.name.match(/(\d+)$/)
-                            const num = m ? m[1] : p.interface.name
-                            const portName = `Porta ${num}`
-                            return (
-                              <option key={p.interface.id} value={p.interface.id}>
-                                {occupiedLabel(portName, p.linked_interface!, p.interface.label)}
-                              </option>
-                            )
-                          })}
-                        </optgroup>
-                      )}
-                    </>
+                    <PortOptionGroups
+                      ports={ppPorts.filter(p => p.interface.id !== ppIfaceDevSide)}
+                      currentPortId={ppIfaceSwSide}
+                      labelFn={p => {
+                        const m = p.interface.name.match(/(\d+)$/)
+                        return `Porta ${m ? m[1] : p.interface.name}${p.interface.label ? ` — ${p.interface.label}` : ''}`
+                      }}
+                    />
                   )}
                 </select>
               </div>
@@ -400,26 +289,7 @@ const AddConnectionModal: React.FC<Props> = ({ isOpen, onClose, editing }) => {
             <select value={ifaceCId} onChange={e => setIfaceCId(e.target.value ? Number(e.target.value) : '')} disabled={!switchId} className={sel}>
               <option value="">— seleziona —</option>
               {switchPorts && (
-                <>
-                  {switchPortsFree.length > 0 && (
-                    <optgroup label="── Libere">
-                      {switchPortsFree.map(p => (
-                        <option key={p.interface.id} value={p.interface.id}>
-                          {p.interface.name}{p.interface.label ? ` — ${p.interface.label}` : ''}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                  {switchPortsOccupied.length > 0 && (
-                    <optgroup label="── In uso">
-                      {switchPortsOccupied.map(p => (
-                        <option key={p.interface.id} value={p.interface.id}>
-                          {occupiedLabel(p.interface.name, p.linked_interface!, p.interface.label)}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )}
-                </>
+                <PortOptionGroups ports={switchPorts} currentPortId={ifaceCId} />
               )}
             </select>
           </div>

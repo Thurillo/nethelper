@@ -3,7 +3,8 @@ import Modal from '../common/Modal'
 import { patchPanelsApi } from '../../api/patchPanels'
 import { devicesApi } from '../../api/devices'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import type { PatchPortDetail, NetworkInterface, Device } from '../../types'
+import { PortOptionGroups } from '../../utils/portOptions'
+import type { PatchPortDetail, DevicePortDetail, Device } from '../../types'
 
 interface PortEditModalProps {
   isOpen: boolean
@@ -49,7 +50,7 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
 
   // Connessione switch
   const [selectedSwitchId, setSelectedSwitchId] = useState<number | ''>('')
-  const [switchInterfaces, setSwitchInterfaces] = useState<NetworkInterface[]>([])
+  const [switchPorts, setSwitchPorts] = useState<DevicePortDetail[]>([])
   const [selectedSwitchPortId, setSelectedSwitchPortId] = useState<number | ''>('')
 
   // Connessione patch panel
@@ -62,7 +63,7 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
   const [deviceTypeFilter, setDeviceTypeFilter] = useState('')
   const [onlyAvailable, setOnlyAvailable] = useState(false)
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | ''>('')
-  const [deviceInterfaces, setDeviceInterfaces] = useState<NetworkInterface[]>([])
+  const [devicePorts, setDevicePorts] = useState<DevicePortDetail[]>([])
   const [selectedDeviceIfaceId, setSelectedDeviceIfaceId] = useState<number | ''>('')
 
   const [connTarget, setConnTarget] = useState<ConnectionTarget>('none')
@@ -127,9 +128,9 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
       setDeviceSearch('')
       setDeviceTypeFilter('')
       setOnlyAvailable(false)
-      setSwitchInterfaces([])
+      setSwitchPorts([])
       setPpPorts([])
-      setDeviceInterfaces([])
+      setDevicePorts([])
       setConnTarget('none')
       setError(null)
     }
@@ -138,12 +139,12 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
   // Carica porte switch quando viene selezionato uno switch
   useEffect(() => {
     if (selectedSwitchId) {
-      devicesApi.getInterfaces(selectedSwitchId as number)
-        .then(setSwitchInterfaces)
-        .catch(() => setSwitchInterfaces([]))
+      devicesApi.getPorts(selectedSwitchId as number)
+        .then(setSwitchPorts)
+        .catch(() => setSwitchPorts([]))
       setSelectedSwitchPortId('')
     } else {
-      setSwitchInterfaces([])
+      setSwitchPorts([])
       setSelectedSwitchPortId('')
     }
   }, [selectedSwitchId])
@@ -152,7 +153,7 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
   useEffect(() => {
     if (selectedPpId) {
       patchPanelsApi.getPorts(selectedPpId as number)
-        .then(ports => setPpPorts(ports.filter(p => p.linked_interface === null)))
+        .then(setPpPorts)
         .catch(() => setPpPorts([]))
       setSelectedPpPortId('')
     } else {
@@ -161,18 +162,19 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
     }
   }, [selectedPpId])
 
-  // Carica interfacce dispositivo quando selezionato
+  // Carica porte dispositivo quando selezionato
   useEffect(() => {
     if (selectedDeviceId) {
-      devicesApi.getInterfaces(selectedDeviceId as number)
-        .then(ifaces => {
-          setDeviceInterfaces(ifaces)
-          if (ifaces.length === 1) setSelectedDeviceIfaceId(ifaces[0].id)
+      devicesApi.getPorts(selectedDeviceId as number)
+        .then(ports => {
+          setDevicePorts(ports)
+          const freePorts = ports.filter(p => !p.linked_interface || p.interface.id === port?.linked_interface?.id)
+          if (freePorts.length === 1) setSelectedDeviceIfaceId(freePorts[0].interface.id)
           else setSelectedDeviceIfaceId('')
         })
-        .catch(() => setDeviceInterfaces([]))
+        .catch(() => setDevicePorts([]))
     } else {
-      setDeviceInterfaces([])
+      setDevicePorts([])
       setSelectedDeviceIfaceId('')
     }
   }, [selectedDeviceId])
@@ -368,7 +370,7 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
                 </p>
               )}
             </div>
-            {switchInterfaces.length > 0 && (
+            {switchPorts.length > 0 && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Porta dello switch</label>
                 <select
@@ -377,11 +379,10 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">-- Seleziona porta --</option>
-                  {switchInterfaces.map((iface) => (
-                    <option key={iface.id} value={iface.id}>
-                      {iface.name}{iface.label ? ` (${iface.label})` : ''}
-                    </option>
-                  ))}
+                  <PortOptionGroups
+                    ports={switchPorts}
+                    currentPortId={port?.linked_interface?.id}
+                  />
                 </select>
               </div>
             )}
@@ -415,18 +416,18 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="">-- Seleziona porta --</option>
-                  {ppPorts.map((p) => (
-                    <option key={p.interface.id} value={p.interface.id}>
-                      {extractPortNumber(p.interface.name)}
-                      {p.interface.label ? ` — ${p.interface.label}` : ''}
-                      {p.interface.room_destination ? ` → ${p.interface.room_destination}` : ''}
-                    </option>
-                  ))}
+                  <PortOptionGroups
+                    ports={ppPorts}
+                    currentPortId={port?.linked_interface?.id}
+                    labelFn={p => {
+                      const num = extractPortNumber(p.interface.name)
+                      const lbl = (p.interface as any).label ? ` — ${(p.interface as any).label}` : ''
+                      const dest = (p.interface as any).room_destination ? ` → ${(p.interface as any).room_destination}` : ''
+                      return `Porta ${num}${lbl}${dest}`
+                    }}
+                  />
                 </select>
               </div>
-            )}
-            {selectedPpId !== '' && ppPorts.length === 0 && (
-              <p className="text-xs text-orange-500">Nessuna porta libera disponibile su questo patch panel.</p>
             )}
           </>
         )}
@@ -498,35 +499,23 @@ const PortEditModal: React.FC<PortEditModalProps> = ({
             )}
 
             {/* Interface picker (shown after device selection) */}
-            {selectedDeviceId !== '' && deviceInterfaces.length > 0 && (
+            {selectedDeviceId !== '' && devicePorts.length > 0 && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Interfaccia</label>
-                {deviceInterfaces.length === 1 ? (
-                  <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 font-mono">
-                    {deviceInterfaces[0].name}
-                    {deviceInterfaces[0].mac_address && (
-                      <span className="ml-2 text-xs text-gray-400">{deviceInterfaces[0].mac_address}</span>
-                    )}
-                  </p>
-                ) : (
-                  <select
-                    value={selectedDeviceIfaceId}
-                    onChange={e => setSelectedDeviceIfaceId(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  >
-                    <option value="">-- Seleziona interfaccia --</option>
-                    {deviceInterfaces.map(iface => (
-                      <option key={iface.id} value={iface.id}>
-                        {iface.name}
-                        {iface.label ? ` — ${iface.label}` : ''}
-                        {iface.mac_address ? ` (${iface.mac_address})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
+                <select
+                  value={selectedDeviceIfaceId}
+                  onChange={e => setSelectedDeviceIfaceId(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">-- Seleziona interfaccia --</option>
+                  <PortOptionGroups
+                    ports={devicePorts}
+                    currentPortId={port?.linked_interface?.id}
+                  />
+                </select>
               </div>
             )}
-            {selectedDeviceId !== '' && deviceInterfaces.length === 0 && (
+            {selectedDeviceId !== '' && devicePorts.length === 0 && (
               <p className="text-xs text-orange-500">
                 Questo dispositivo non ha interfacce configurate.
               </p>
