@@ -27,13 +27,17 @@ EXPORT_TABLES = [
     "vlan",
     "device",
     "interface",
+    "interface_vlan",   # junction: interface ↔ vlan
     "cable",
     "ip_prefix",
     "ip_address",
+    "scheduled_scan",
     "scan_job",
     "mac_entry",
     "scan_conflict",
     "audit_log",
+    "app_setting",
+    "topology_map",
 ]
 
 NETWORK_RESET_TABLES = [
@@ -44,14 +48,18 @@ NETWORK_RESET_TABLES = [
     "cable",
     "ip_address",
     "ip_prefix",
+    "interface_vlan",
     "interface",
     "device",
 ]
 
 FULL_EXTRA_TABLES = [
+    "scheduled_scan",
     "cabinet",
     "vlan",
     "site",
+    "app_setting",
+    "topology_map",
 ]
 
 
