@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated
@@ -71,6 +72,19 @@ def _serialize_value(val):
         return str(val)
     if isinstance(val, Decimal):
         return float(val)
+    return val
+
+
+_ISO_DT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
+
+
+def _deserialize_value(val):
+    """Convert ISO datetime strings back to datetime objects (required by asyncpg)."""
+    if isinstance(val, str) and _ISO_DT_RE.match(val):
+        try:
+            return datetime.fromisoformat(val)
+        except ValueError:
+            pass
     return val
 
 
@@ -163,7 +177,7 @@ async def import_backup(
                 f'INSERT INTO "{table}" ({col_list}) VALUES ({placeholders})'
             )
             for row in rows:
-                await db.execute(insert_sql, row)
+                await db.execute(insert_sql, {k: _deserialize_value(v) for k, v in row.items()})
             restored[table] = len(rows)
         except Exception as exc:
             logger.warning(
