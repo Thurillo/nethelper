@@ -201,7 +201,7 @@ const Sidebar: React.FC = () => {
         <NavGroup label="Rete"       items={networkNav} collapsed={collapsed} onNavClick={handleNavClick} />
         <NavGroup label="Operazioni" items={scanNav}    collapsed={collapsed} pendingConflicts={pendingConflicts} onNavClick={handleNavClick} />
         {isAdmin() && (
-          <NavGroup label="Admin" items={adminNav} collapsed={collapsed} onNavClick={handleNavClick} />
+          <NavGroup label="Admin" items={adminNav} collapsed={collapsed} isAdmin={isAdmin()} onNavClick={handleNavClick} />
         )}
         <NavGroup label="Supporto" items={helpNav} collapsed={collapsed} isAdmin={isAdmin()} onNavClick={handleNavClick} />
       </nav>
