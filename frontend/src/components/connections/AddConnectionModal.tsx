@@ -6,6 +6,7 @@ import { switchesApi } from '../../api/switches'
 import { patchPanelsApi } from '../../api/patchPanels'
 import { cablesApi } from '../../api/cables'
 import { PortOptionGroups } from '../../utils/portOptions'
+import { QK } from '../../utils/queryKeys'
 import type { ConnectionPath } from '../../api/connections'
 
 type Mode = 'direct' | 'via_pp'
@@ -90,7 +91,7 @@ const AddConnectionModal: React.FC<Props> = ({ isOpen, onClose, editing }) => {
 
   /** Usa /devices/{id}/ports per avere info sul linked_interface di ogni porta */
   const { data: devicePorts } = useQuery({
-    queryKey: ['device-ports', deviceId],
+    queryKey: QK.devices.ports(deviceId as number),
     queryFn: () => devicesApi.getPorts(deviceId as number),
     enabled: isOpen && !!deviceId,
     staleTime: 10_000,
@@ -153,7 +154,7 @@ const AddConnectionModal: React.FC<Props> = ({ isOpen, onClose, editing }) => {
       qc.invalidateQueries({ queryKey: ['switch-ports'] })
       qc.invalidateQueries({ queryKey: ['pp-ports'] })
       qc.invalidateQueries({ queryKey: ['patch-panel-ports'] })
-      qc.invalidateQueries({ queryKey: ['device-ports'] })
+      qc.invalidateQueries({ queryKey: ['devices'] }) // invalida tutti i ports sotto devices/*
       qc.invalidateQueries({ queryKey: ['devices'] })
       onClose()
     },

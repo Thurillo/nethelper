@@ -14,6 +14,7 @@ import { PortOptionGroups } from '../utils/portOptions'
 import { DeviceTypeBadge, DeviceStatusBadge } from '../components/common/Badge'
 import CheckMKBadge from '../components/common/CheckMKBadge'
 import LastSeenBadge from '../components/common/LastSeenBadge'
+import { QK } from '../utils/queryKeys'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -69,7 +70,7 @@ const DeviceDetailPage: React.FC = () => {
   })
   // Usa getPorts (che include linked_interface) per mostrare stato occupata/libera
   const { data: targetPorts } = useQuery({
-    queryKey: ['device-ports', linkTargetDeviceId],
+    queryKey: QK.devices.ports(linkTargetDeviceId as number),
     queryFn: () => devicesApi.getPorts(linkTargetDeviceId as number),
     enabled: !!linkingIface && !!linkTargetDeviceId,
     staleTime: 10_000,

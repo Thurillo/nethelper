@@ -9,6 +9,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner'
 import EmptyState from '../components/common/EmptyState'
 import QuickAddVendorModal from '../components/common/QuickAddVendorModal'
 import { PortOptionGroups } from '../utils/portOptions'
+import { QK } from '../utils/queryKeys'
 import type { Device, SwitchPortDetail, DevicePortDetail } from '../types'
 
 // ─── Port dot ────────────────────────────────────────────────────────────────
@@ -72,21 +73,21 @@ const SwitchPortEditModal: React.FC<{
   const [error, setError] = useState<string | null>(null)
 
   const { data: allDevices } = useQuery({
-    queryKey: ['devices-for-link'],
+    queryKey: QK.devices.forLink(),
     queryFn: () => devicesApi.list({ size: 500, exclude_device_type: 'patch_panel' }),
     enabled: isOpen,
     staleTime: 60_000,
   })
 
   const { data: targetDevicePorts } = useQuery<DevicePortDetail[]>({
-    queryKey: ['device-ports', targetDeviceId],
+    queryKey: QK.devices.ports(targetDeviceId as number),
     queryFn: () => devicesApi.getPorts(targetDeviceId as number),
     enabled: isOpen && !!targetDeviceId,
     staleTime: 10_000,
   })
 
   const { data: vlans } = useQuery({
-    queryKey: ['vlans-all'],
+    queryKey: QK.vlans.all(),
     queryFn: () => vlansApi.list({ size: 500 }),
     enabled: isOpen,
     staleTime: 60_000,
@@ -548,7 +549,7 @@ const SwitchesPage: React.FC = () => {
   const expandId = searchParams.get('expand') ? Number(searchParams.get('expand')) : null
 
   const { data, isLoading } = useQuery({
-    queryKey: ['switches-all'],
+    queryKey: QK.devices.switches(),
     queryFn: () => devicesApi.list({ device_type: 'switch', page: 1, size: 500 }),
     staleTime: 30_000,
   })
