@@ -82,6 +82,7 @@ const DeviceDetailPage: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['devices', deviceId, 'ports'] })
       qc.invalidateQueries({ queryKey: ['connections'] })
+      addToast('Collegamento creato', 'success')
       setLinkingIface(null); setLinkTargetDeviceId(''); setLinkTargetIfaceId('')
     },
     onError: () => addToast('Errore durante il collegamento', 'error'),
@@ -92,6 +93,7 @@ const DeviceDetailPage: React.FC = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['devices', deviceId, 'ports'] })
       qc.invalidateQueries({ queryKey: ['connections'] })
+      addToast('Collegamento rimosso', 'success')
     },
     onError: () => addToast('Errore durante la disconnessione', 'error'),
   })

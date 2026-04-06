@@ -11,6 +11,7 @@ import QuickAddVendorModal from '../components/common/QuickAddVendorModal'
 import { PortOptionGroups } from '../utils/portOptions'
 import { QK } from '../utils/queryKeys'
 import DeviceCombobox from '../components/common/DeviceCombobox'
+import { useUiStore } from '../store/uiStore'
 import type { Device, SwitchPortDetail, DevicePortDetail } from '../types'
 
 // ─── Port dot ────────────────────────────────────────────────────────────────
@@ -62,6 +63,7 @@ const SwitchPortEditModal: React.FC<{
   deviceId: number
   onSaved: () => void
 }> = ({ isOpen, onClose, port, deviceId, onSaved }) => {
+  const { addToast } = useUiStore()
   const [label, setLabel] = useState('')
   const [description, setDescription] = useState('')
   const [adminUp, setAdminUp] = useState(true)
@@ -125,10 +127,12 @@ const SwitchPortEditModal: React.FC<{
         await switchesApi.linkPort(deviceId, port.interface.id, targetIfaceId)
       }
 
+      addToast('Porta salvata', 'success')
       onSaved()
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Errore durante il salvataggio'
       setError(msg)
+      addToast(msg, 'error')
     } finally {
       setSaving(false)
     }

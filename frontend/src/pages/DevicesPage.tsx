@@ -7,6 +7,7 @@ import { sitesApi } from '../api/sites'
 import { cabinetsApi } from '../api/cabinets'
 import { vendorsApi } from '../api/vendors'
 import { useAuthStore } from '../store/authStore'
+import { useUiStore } from '../store/uiStore'
 import { useDevices, useDeleteDevice, useDeviceConnectionsPreview } from '../hooks/useDevices'
 import { useCreateCabinet } from '../hooks/useCabinets'
 import Table, { Column } from '../components/common/Table'
@@ -50,6 +51,7 @@ const defaultCabinetForm: CabinetCreate = { name: '', site_id: 0, u_count: 42 }
 const DevicesPage: React.FC = () => {
   const navigate = useNavigate()
   const { isAdmin } = useAuthStore()
+  const { addToast } = useUiStore()
   const qc = useQueryClient()
   const [page, setPage] = useState(1)
   const [filters, setFilters] = useState<DeviceFilters>({})
@@ -136,14 +138,14 @@ const DevicesPage: React.FC = () => {
 
   const createDevice = useMutation({
     mutationFn: (d: DeviceCreate) => devicesApi.create(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['devices'] }); closeModal() },
-    onError: () => setError('Errore durante il salvataggio'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['devices'] }); addToast('Dispositivo creato', 'success'); closeModal() },
+    onError: () => { setError('Errore durante il salvataggio'); addToast('Errore durante la creazione', 'error') },
   })
 
   const updateDevice = useMutation({
     mutationFn: ({ id, data }: { id: number; data: Partial<DeviceCreate> }) => devicesApi.update(id, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['devices'] }); closeModal() },
-    onError: () => setError('Errore durante il salvataggio'),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['devices'] }); addToast('Dispositivo aggiornato', 'success'); closeModal() },
+    onError: () => { setError('Errore durante il salvataggio'); addToast('Errore durante il salvataggio', 'error') },
   })
 
   const deleteDevice = useDeleteDevice()
@@ -152,21 +154,25 @@ const DevicesPage: React.FC = () => {
   const bulkUpdateMutation = useMutation({
     mutationFn: (args: { ids: number[]; data: { cabinet_id?: number | null; status?: string } }) =>
       devicesApi.bulkUpdate(args.ids, args.data),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['devices'] })
+      addToast(`${res.updated} dispositivi aggiornati`, 'success')
       setSelectedIds(new Set())
       setBulkAction(null)
     },
+    onError: () => addToast('Errore durante l\'aggiornamento bulk', 'error'),
   })
 
   const bulkDeleteMutation = useMutation({
     mutationFn: (ids: number[]) => devicesApi.bulkDelete(ids),
-    onSuccess: () => {
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['devices'] })
+      addToast(`${res.deleted} dispositivi eliminati`, 'success')
       setSelectedIds(new Set())
       setBulkAction(null)
       setBulkConfirmDelete(false)
     },
+    onError: () => addToast('Errore durante l\'eliminazione bulk', 'error'),
   })
 
   const toggleSelect = (id: number) => setSelectedIds(prev => {
