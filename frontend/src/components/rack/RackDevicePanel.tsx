@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { X, Edit2, ExternalLink } from 'lucide-react'
+import { X, Edit2, ExternalLink, Network } from 'lucide-react'
 import type { RackDiagramDevice, DevicePortDetail, PatchPortDetail } from '../../types'
 import { DeviceTypeBadge, DeviceStatusBadge } from '../common/Badge'
 import { devicesApi } from '../../api/devices'
@@ -27,13 +27,16 @@ const RackDevicePanel: React.FC<RackDevicePanelProps> = ({ device, onClose, onEd
     staleTime: 30_000,
   })
 
-  // Fetch ports (with cable info) for switches
-  const { data: switchPorts } = useQuery<DevicePortDetail[]>({
+  // Fetch ports (with cable info) for all non-PP devices
+  const { data: devicePorts } = useQuery<DevicePortDetail[]>({
     queryKey: ['devices', device.id, 'ports'],
     queryFn: () => devicesApi.getPorts(device.id),
-    enabled: isSwitch,
+    enabled: !isPatchPanel,
     staleTime: 30_000,
   })
+  const switchPorts = isSwitch ? devicePorts : undefined
+  const connectedPorts = !isPatchPanel && !isSwitch ? devicePorts?.filter(p => p.linked_interface) : undefined
+  const allPortsForDevice = !isPatchPanel && !isSwitch ? devicePorts : undefined
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
@@ -110,6 +113,40 @@ const RackDevicePanel: React.FC<RackDevicePanelProps> = ({ device, onClose, onEd
             Dettaglio completo
           </Link>
         </div>
+
+        {/* Connessioni per dispositivi normali (non switch, non PP) */}
+        {allPortsForDevice && allPortsForDevice.length > 0 && (
+          <div>
+            <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <Network size={14} className="text-gray-400" />
+              Connessioni
+              <span className="text-xs font-normal text-gray-500">
+                ({connectedPorts?.length ?? 0} / {allPortsForDevice.length} interfacce)
+              </span>
+            </h4>
+            <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+              {allPortsForDevice.map(p => (
+                <div key={p.interface.id} className="flex items-center gap-2 px-3 py-2 text-xs">
+                  <span className="font-mono text-gray-700 w-20 flex-shrink-0">{p.interface.name}</span>
+                  {p.interface.label && (
+                    <span className="text-gray-400 truncate flex-shrink-0 max-w-[80px]">{p.interface.label}</span>
+                  )}
+                  {p.linked_interface ? (
+                    <span className="flex items-center gap-1 text-green-700 font-medium truncate ml-auto">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                      {p.linked_interface.device_name} — {p.linked_interface.name}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300 ml-auto">non collegata</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {allPortsForDevice && allPortsForDevice.length === 0 && (
+          <p className="text-xs text-gray-400 italic">Nessuna interfaccia configurata</p>
+        )}
 
         {/* Patch panel inline */}
         {isPatchPanel && (
