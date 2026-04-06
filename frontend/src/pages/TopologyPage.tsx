@@ -415,6 +415,7 @@ const TopologyPage: React.FC = () => {
           primary_ip: n.primary_ip,
           mac_address: n.mac_address,
           status: n.status,
+          cabinet_name: n.cabinet_name ?? null,
           device_id: n.id,
           checkmk_status: checkmkEntry?.state_label ?? null,
           highlighted: hasSearch && matchSet.has(n.id),

@@ -55,6 +55,7 @@ export interface TopologyDeviceNodeData extends Record<string, unknown> {
   primary_ip: string | null
   mac_address: string | null
   status: string
+  cabinet_name: string | null
   checkmk_status: CheckMKStatus | null
   device_id: number
   highlighted: boolean
@@ -62,13 +63,28 @@ export interface TopologyDeviceNodeData extends Record<string, unknown> {
   onSelect: (id: number) => void
 }
 
+const DEVICE_TYPE_LABELS: Partial<Record<DeviceType, string>> = {
+  switch: 'Switch', router: 'Router', access_point: 'AP', server: 'Server',
+  patch_panel: 'Patch Panel', pdu: 'PDU', firewall: 'Firewall', ups: 'UPS',
+  unmanaged_switch: 'Switch NG', workstation: 'WS', printer: 'Stampante',
+  camera: 'Telecamera', phone: 'Telefono', other: 'Altro',
+}
+
 export const TopologyDeviceNode = memo(({ data, selected }: { data: TopologyDeviceNodeData; selected: boolean }) => {
   const c = DEVICE_COLORS[data.device_type] ?? DEVICE_COLORS.other
+  const typeLabel = DEVICE_TYPE_LABELS[data.device_type] ?? data.device_type
+  const tooltipParts = [
+    `[${typeLabel}] ${data.label}`,
+    data.primary_ip ? `IP: ${data.primary_ip}` : null,
+    data.cabinet_name ? `Armadio: ${data.cabinet_name}` : null,
+    data.status !== 'active' ? `Stato: ${data.status}` : null,
+  ].filter(Boolean).join('\n')
   return (
     <>
       <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
       <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
       <div
+        title={tooltipParts}
         className={[
           'rounded-lg border-2 px-2.5 py-1.5 text-xs shadow-sm cursor-pointer transition-all',
           c.bg, c.border, c.text,
@@ -76,13 +92,27 @@ export const TopologyDeviceNode = memo(({ data, selected }: { data: TopologyDevi
           data.highlighted ? 'ring-4 ring-yellow-400 ring-offset-1' : '',
           data.dimmed ? 'opacity-20' : '',
         ].filter(Boolean).join(' ')}
-        style={{ minWidth: 120, maxWidth: 180 }}
+        style={{ minWidth: 130, maxWidth: 200 }}
         onClick={() => data.onSelect(data.device_id)}
       >
-        <div className="font-semibold truncate">{data.label}</div>
+        {/* Name row + type badge */}
+        <div className="flex items-start justify-between gap-1">
+          <div className="font-semibold truncate leading-tight">{data.label}</div>
+          <div className="text-[9px] opacity-50 flex-shrink-0 mt-px capitalize leading-tight">
+            {typeLabel}
+          </div>
+        </div>
+        {/* IP */}
         {data.primary_ip && (
-          <div className="text-[10px] opacity-70 font-mono truncate">{data.primary_ip}</div>
+          <div className="text-[10px] opacity-70 font-mono truncate mt-0.5">{data.primary_ip}</div>
         )}
+        {/* Cabinet badge */}
+        {data.cabinet_name && (
+          <div className="text-[9px] opacity-55 truncate mt-0.5 flex items-center gap-0.5">
+            <span>🗄</span>{data.cabinet_name}
+          </div>
+        )}
+        {/* CheckMK */}
         {data.checkmk_status && (
           <div className="mt-0.5">
             <CheckMKBadge status={data.checkmk_status} />
