@@ -289,6 +289,8 @@ const TopologyPage: React.FC = () => {
   const dirtyLayoutRef = useRef<Record<string, { x: number; y: number; visible: boolean }>>({})
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const autoLayoutRef = useRef<Record<string, TopologyMapNodeLayout> | null>(null)
+  // Ref che rispecchia sempre effectiveLayout per uso nei callback (evita closure stale)
+  const effectiveLayoutRef = useRef<Record<string, TopologyMapNodeLayout>>({})
   const topologyGraphRef = useRef<TopologyGraphHandle>(null)
   const historyPastRef = useRef<Array<Record<string, { x: number; y: number; visible: boolean }>>>([])
   const historyFutureRef = useRef<Array<Record<string, { x: number; y: number; visible: boolean }>>>([])
@@ -321,7 +323,12 @@ const TopologyPage: React.FC = () => {
   // ── Save layout ────────────────────────────────────────────────────────────
   const saveLayout = useCallback(async () => {
     if (!selectedMapId || Object.keys(dirtyLayoutRef.current).length === 0) return
-    const baseLayout = activeMap?.layout ?? {}
+    // Se activeMap.layout è vuoto (primo salvataggio / solo auto-layout),
+    // usiamo effectiveLayout come base per preservare le posizioni di TUTTI i nodi.
+    // Senza questo, un toggle di visibilità su un singolo nodo salverebbe solo
+    // quell'entry, e al refetch tutti gli altri nodi tornerebbero a {x:0,y:0}.
+    const savedLayout = activeMap?.layout ?? {}
+    const baseLayout = Object.keys(savedLayout).length > 0 ? savedLayout : effectiveLayoutRef.current
     const merged: Record<string, TopologyMapNodeLayout> = { ...baseLayout }
     Object.entries(dirtyLayoutRef.current).forEach(([k, v]) => { merged[k] = v })
     dirtyLayoutRef.current = {}
@@ -353,6 +360,8 @@ const TopologyPage: React.FC = () => {
     }
     return autoLayoutRef.current
   }, [topology, activeMap, cabinets])
+  // Mantieni il ref sincronizzato per uso in saveLayout (che è dichiarato prima del useMemo)
+  effectiveLayoutRef.current = effectiveLayout
 
   // When map changes, reset auto-layout cache + history
   React.useEffect(() => {
@@ -733,7 +742,35 @@ const TopologyPage: React.FC = () => {
 
   const [edges, setEdges, onEdgesChange] = useEdgesState(rfEdges)
 
-  React.useEffect(() => { setNodes(rfNodes) }, [rfNodes, setNodes])
+  // Sincronizza rfNodes → ReactFlow in modo selettivo:
+  // - Reset completo (con posizioni) solo se la struttura della topologia cambia
+  //   (nodi aggiunti/rimossi, mappa selezionata diversa).
+  // - Aggiornamento in-place (solo data + hidden, preservando le posizioni draggabili)
+  //   per tutti gli altri aggiornamenti (checkmk, search highlight, visibilità toggle
+  //   post-salvataggio).
+  const structureKeyRef = React.useRef<string>('')
+  React.useEffect(() => {
+    const nodeIds = (topology?.nodes ?? []).map(n => n.id).sort().join(',')
+    const cabIds = (cabinets ?? []).map(c => c.id).sort().join(',')
+    const newKey = `${selectedMapId}|${nodeIds}|${cabIds}`
+    const structureChanged = newKey !== structureKeyRef.current
+    structureKeyRef.current = newKey
+
+    if (structureChanged) {
+      // Struttura cambiata: reset completo con le posizioni di rfNodes
+      setNodes(rfNodes)
+    } else {
+      // Solo dati/visibilità cambiati: aggiorna in-place senza toccare le posizioni
+      setNodes((prev) =>
+        prev.map((n) => {
+          const fresh = rfNodes.find((r) => r.id === n.id)
+          if (!fresh) return n
+          return { ...n, data: fresh.data, hidden: fresh.hidden }
+        })
+      )
+    }
+  }, [rfNodes, setNodes]) // eslint-disable-line react-hooks/exhaustive-deps
+
   React.useEffect(() => { setEdges(rfEdges) }, [rfEdges, setEdges])
 
   // ── Neighbor map for quick-toggle sidebar expansion ──────────────────────────
