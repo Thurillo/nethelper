@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronUp, Edit2, Link, Network, Plus, Server } from 'lucide-react'
+import { ChevronDown, ChevronUp, Edit2, Link, Network, Plus, Server, Trash2, Wifi, WifiOff } from 'lucide-react'
 import { devicesApi } from '../api/devices'
 import { switchesApi, type SwitchPortUpdateBody } from '../api/switches'
 import { vlansApi } from '../api/vlans'
+import { cabinetsApi } from '../api/cabinets'
+import { vendorsApi } from '../api/vendors'
 import LoadingSpinner from '../components/common/LoadingSpinner'
 import EmptyState from '../components/common/EmptyState'
+import Modal from '../components/common/Modal'
+import ConfirmDialog from '../components/common/ConfirmDialog'
 import QuickAddVendorModal from '../components/common/QuickAddVendorModal'
 import { PortOptionGroups } from '../utils/portOptions'
 import { QK } from '../utils/queryKeys'
 import DeviceCombobox from '../components/common/DeviceCombobox'
+import { useAuthStore } from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
-import type { Device, SwitchPortDetail, DevicePortDetail } from '../types'
+import type { Device, DeviceCreate, SwitchPortDetail, DevicePortDetail } from '../types'
 
 // ─── Port dot ────────────────────────────────────────────────────────────────
 
@@ -499,9 +504,16 @@ const SwitchExpanded: React.FC<{
 
 // ─── Switch card ──────────────────────────────────────────────────────────────
 
-const SwitchCard: React.FC<{ sw: Device; initialExpanded?: boolean }> = ({ sw, initialExpanded = false }) => {
+const SwitchCard: React.FC<{
+  sw: Device
+  initialExpanded?: boolean
+  onEdit: (sw: Device) => void
+  onDelete: (sw: Device) => void
+}> = ({ sw, initialExpanded = false, onEdit, onDelete }) => {
+  const { isAdmin } = useAuthStore()
   const [expanded, setExpanded] = useState(initialExpanded)
   const cardRef = useRef<HTMLDivElement>(null)
+  const isUnmanaged = sw.device_type === 'unmanaged_switch'
 
   useEffect(() => {
     if (initialExpanded && cardRef.current) {
@@ -513,33 +525,78 @@ const SwitchCard: React.FC<{ sw: Device; initialExpanded?: boolean }> = ({ sw, i
     <div ref={cardRef} className={`bg-white rounded-xl border transition-all ${
       expanded ? 'border-primary-300 shadow-sm col-span-full' : 'border-gray-200 hover:border-primary-200 hover:shadow-sm'
     }`}>
-      <button
-        onClick={() => setExpanded(prev => !prev)}
-        className="w-full text-left p-5"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+      <div className="p-5">
+        <div className="flex items-start gap-3">
+          {/* Expand button */}
+          <button
+            onClick={() => setExpanded(prev => !prev)}
+            className="flex items-center gap-3 min-w-0 flex-1 text-left"
+          >
             <div className={`p-2 rounded-lg flex-shrink-0 ${expanded ? 'bg-primary-100' : 'bg-gray-100'}`}>
-              <Network size={18} className={expanded ? 'text-primary-600' : 'text-gray-500'} />
+              {isUnmanaged
+                ? <WifiOff size={18} className={expanded ? 'text-primary-600' : 'text-gray-400'} />
+                : <Network size={18} className={expanded ? 'text-primary-600' : 'text-gray-500'} />
+              }
             </div>
             <div className="min-w-0">
-              <h3 className="font-semibold text-gray-900 truncate">{sw.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-gray-900 truncate">{sw.name}</h3>
+                {isUnmanaged && (
+                  <span className="text-[10px] font-medium text-gray-400 bg-gray-100 border border-gray-200 px-1.5 py-0.5 rounded flex-shrink-0">
+                    non gestito
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-500 mt-0.5">
                 {sw.cabinet_name ?? '—'}
                 {sw.model && <span className="ml-2 text-gray-400">{sw.model}</span>}
                 {sw.primary_ip && <span className="ml-2 font-mono text-gray-400">{sw.primary_ip}</span>}
               </p>
             </div>
-          </div>
-          <div className={`flex-shrink-0 transition-colors ${expanded ? 'text-primary-500' : 'text-gray-400'}`}>
-            {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {isAdmin() && (
+              <>
+                <button
+                  onClick={e => { e.stopPropagation(); onEdit(sw) }}
+                  title="Modifica switch"
+                  className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); onDelete(sw) }}
+                  title="Elimina switch"
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => setExpanded(prev => !prev)}
+              className={`p-1.5 rounded-lg transition-colors ${expanded ? 'text-primary-500' : 'text-gray-400'}`}
+            >
+              {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
           </div>
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="px-5 pb-5">
-          <SwitchExpanded deviceId={sw.id} />
+          {isUnmanaged ? (
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm text-gray-400 flex items-center gap-2">
+                <WifiOff size={14} />
+                Switch non gestito — il port management SNMP non è disponibile.
+              </p>
+            </div>
+          ) : (
+            <SwitchExpanded deviceId={sw.id} />
+          )}
         </div>
       )}
     </div>
@@ -556,18 +613,151 @@ interface CabinetGroup {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+interface SWForm {
+  name: string
+  device_type: 'switch' | 'unmanaged_switch'
+  primary_ip: string
+  port_count: number | ''
+  cabinet_id: number | ''
+  vendor_id: number | ''
+  model: string
+  notes: string
+}
+
+const emptySWForm: SWForm = {
+  name: '', device_type: 'switch', primary_ip: '',
+  port_count: '', cabinet_id: '', vendor_id: '', model: '', notes: '',
+}
+
 const SwitchesPage: React.FC = () => {
+  const { isAdmin } = useAuthStore()
+  const { addToast } = useUiStore()
+  const qc = useQueryClient()
+
   const [vendorModalOpen, setVendorModalOpen] = useState(false)
   const [vendorAdded, setVendorAdded] = useState<string | null>(null)
   const [cabinetFilter, setCabinetFilter] = useState<string>('')
   const [searchParams] = useSearchParams()
   const expandId = searchParams.get('expand') ? Number(searchParams.get('expand')) : null
 
-  const { data, isLoading } = useQuery({
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingSW, setEditingSW] = useState<Device | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Device | null>(null)
+  const [form, setForm] = useState<SWForm>(emptySWForm)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  const { data: managed, isLoading: loadingManaged } = useQuery({
     queryKey: QK.devices.switches(),
     queryFn: () => devicesApi.list({ device_type: 'switch', page: 1, size: 500 }),
     staleTime: 30_000,
   })
+
+  const { data: unmanaged, isLoading: loadingUnmanaged } = useQuery({
+    queryKey: ['devices-unmanaged-switches'],
+    queryFn: () => devicesApi.list({ device_type: 'unmanaged_switch', page: 1, size: 500 }),
+    staleTime: 30_000,
+  })
+
+  const isLoading = loadingManaged || loadingUnmanaged
+  const allItems = [...(managed?.items ?? []), ...(unmanaged?.items ?? [])]
+  const totalCount = (managed?.total ?? 0) + (unmanaged?.total ?? 0)
+
+  const { data: cabinetsData } = useQuery({
+    queryKey: QK.cabinets.all(),
+    queryFn: () => cabinetsApi.list({ size: 100 }),
+    staleTime: 60_000,
+    enabled: isModalOpen,
+  })
+
+  const { data: vendorsData } = useQuery({
+    queryKey: QK.vendors.all(),
+    queryFn: () => vendorsApi.list({ size: 100 }),
+    staleTime: 60_000,
+    enabled: isModalOpen,
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (f: SWForm) => devicesApi.create({
+      name: f.name,
+      device_type: f.device_type,
+      status: 'active',
+      primary_ip: f.primary_ip.trim() || null,
+      port_count: f.port_count !== '' ? Number(f.port_count) : null,
+      cabinet_id: f.cabinet_id !== '' ? Number(f.cabinet_id) : null,
+      vendor_id: f.vendor_id !== '' ? Number(f.vendor_id) : null,
+      model: f.model.trim() || null,
+      notes: f.notes.trim() || null,
+      management_ip: null, mac_address: null, serial_number: null, asset_tag: null,
+      u_position: null, u_height: 1, os_version: null,
+      snmp_community: null, snmp_version: 2, ssh_username: null, ssh_password: null, ssh_port: 22,
+    } as DeviceCreate),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QK.devices.switches() })
+      qc.invalidateQueries({ queryKey: ['devices-unmanaged-switches'] })
+      qc.invalidateQueries({ queryKey: ['devices'] })
+      addToast('Switch creato', 'success')
+      closeModal()
+    },
+    onError: () => { setFormError('Errore durante la creazione'); addToast('Errore durante la creazione', 'error') },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, f }: { id: number; f: SWForm }) => devicesApi.update(id, {
+      name: f.name,
+      primary_ip: f.primary_ip.trim() || null,
+      cabinet_id: f.cabinet_id !== '' ? Number(f.cabinet_id) : null,
+      vendor_id: f.vendor_id !== '' ? Number(f.vendor_id) : null,
+      model: f.model.trim() || null,
+      notes: f.notes.trim() || null,
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QK.devices.switches() })
+      qc.invalidateQueries({ queryKey: ['devices-unmanaged-switches'] })
+      qc.invalidateQueries({ queryKey: ['devices'] })
+      addToast('Switch aggiornato', 'success')
+      closeModal()
+    },
+    onError: () => { setFormError('Errore durante il salvataggio'); addToast('Errore durante il salvataggio', 'error') },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => devicesApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: QK.devices.switches() })
+      qc.invalidateQueries({ queryKey: ['devices-unmanaged-switches'] })
+      qc.invalidateQueries({ queryKey: ['devices'] })
+      addToast('Switch eliminato', 'success')
+      setDeleteTarget(null)
+    },
+    onError: () => addToast('Errore durante l\'eliminazione', 'error'),
+  })
+
+  const openCreate = () => {
+    setEditingSW(null); setForm(emptySWForm); setFormError(null); setIsModalOpen(true)
+  }
+  const openEdit = (sw: Device) => {
+    setEditingSW(sw)
+    setForm({
+      name: sw.name,
+      device_type: sw.device_type as 'switch' | 'unmanaged_switch',
+      primary_ip: sw.primary_ip ?? '',
+      port_count: '',
+      cabinet_id: sw.cabinet_id ?? '',
+      vendor_id: sw.vendor_id ?? '',
+      model: sw.model ?? '',
+      notes: sw.notes ?? '',
+    })
+    setFormError(null); setIsModalOpen(true)
+  }
+  const closeModal = () => { setIsModalOpen(false); setEditingSW(null); setFormError(null) }
+
+  const handleSubmit = () => {
+    if (!form.name.trim()) { setFormError('Il nome è obbligatorio'); return }
+    if (editingSW) updateMutation.mutate({ id: editingSW.id, f: form })
+    else createMutation.mutate(form)
+  }
+
+  const data = { items: allItems, total: totalCount }
 
   // Group by cabinet
   const groups: CabinetGroup[] = []
@@ -589,13 +779,15 @@ const SwitchesPage: React.FC = () => {
     ? groups.filter(g => String(g.cabinetId ?? 'none') === cabinetFilter)
     : groups
 
+  const isPending = createMutation.isPending || updateMutation.isPending
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Switch</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {data ? `${data.total} switch in ${groups.length} armadi` : 'Gestisci le porte degli switch'}
+            {!isLoading ? `${totalCount} switch in ${groups.length} armadi` : 'Gestisci le porte degli switch'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -620,9 +812,17 @@ const SwitchesPage: React.FC = () => {
             onClick={() => { setVendorAdded(null); setVendorModalOpen(true) }}
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
           >
-            <Plus size={14} />
             Aggiungi vendor
           </button>
+          {isAdmin() && (
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+            >
+              <Plus size={15} />
+              Nuovo switch
+            </button>
+          )}
         </div>
       </div>
 
@@ -634,11 +834,12 @@ const SwitchesPage: React.FC = () => {
 
       {isLoading ? (
         <LoadingSpinner centered />
-      ) : data?.items.length === 0 ? (
+      ) : allItems.length === 0 ? (
         <EmptyState
           icon={<Network size={48} />}
           title="Nessuno switch"
-          description="Aggiungi dispositivi di tipo 'Switch' per gestirli qui."
+          description="Crea il primo switch per iniziare a gestirne le porte e le connessioni."
+          action={isAdmin() ? { label: 'Nuovo switch', onClick: openCreate } : undefined}
         />
       ) : (
         <div className="space-y-8">
@@ -654,13 +855,170 @@ const SwitchesPage: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {group.switches.map(sw => (
-                  <SwitchCard key={sw.id} sw={sw} initialExpanded={sw.id === expandId} />
+                  <SwitchCard key={sw.id} sw={sw} initialExpanded={sw.id === expandId} onEdit={openEdit} onDelete={setDeleteTarget} />
                 ))}
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Create / Edit modal */}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        title={editingSW ? `Modifica — ${editingSW.name}` : 'Nuovo switch'}
+        size="md"
+        footer={
+          <>
+            <button onClick={closeModal} className="px-4 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+              Annulla
+            </button>
+            <button onClick={handleSubmit} disabled={isPending} className="px-4 py-2 text-sm text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50">
+              {isPending ? 'Salvataggio...' : 'Salva'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          {formError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{formError}</p>
+          )}
+
+          {/* Tipo switch (solo creazione) */}
+          {!editingSW && (
+            <div className="flex gap-2">
+              {([
+                { value: 'switch', label: 'Gestito (SNMP/SSH)', icon: <Wifi size={14} /> },
+                { value: 'unmanaged_switch', label: 'Non gestito', icon: <WifiOff size={14} /> },
+              ] as const).map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setForm(p => ({ ...p, device_type: opt.value }))}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg border transition-colors ${
+                    form.device_type === opt.value
+                      ? 'bg-primary-50 border-primary-400 text-primary-700'
+                      : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt.icon}{opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Nome */}
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                placeholder="es. SW-01"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                autoFocus
+              />
+            </div>
+
+            {/* IP primario */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                IP primario
+                {form.device_type === 'unmanaged_switch' && (
+                  <span className="ml-1 text-xs text-gray-400">(opzionale)</span>
+                )}
+              </label>
+              <input
+                type="text"
+                value={form.primary_ip}
+                onChange={e => setForm(p => ({ ...p, primary_ip: e.target.value }))}
+                placeholder="es. 192.168.1.10"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+              />
+            </div>
+
+            {/* Numero porte (solo creazione) */}
+            {!editingSW && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Numero porte</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={512}
+                  value={form.port_count}
+                  onChange={e => setForm(p => ({ ...p, port_count: e.target.value ? Number(e.target.value) : '' }))}
+                  placeholder="es. 24"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+                <p className="text-xs text-gray-400 mt-1">Non modificabile dopo la creazione</p>
+              </div>
+            )}
+
+            {/* Armadio */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Armadio</label>
+              <select
+                value={form.cabinet_id}
+                onChange={e => setForm(p => ({ ...p, cabinet_id: e.target.value ? Number(e.target.value) : '' }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">— Nessun armadio —</option>
+                {cabinetsData?.items.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+
+            {/* Vendor */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+              <select
+                value={form.vendor_id}
+                onChange={e => setForm(p => ({ ...p, vendor_id: e.target.value ? Number(e.target.value) : '' }))}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">— Nessun vendor —</option>
+                {vendorsData?.items.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              </select>
+            </div>
+
+            {/* Modello */}
+            <div className={editingSW ? '' : 'sm:col-span-2'}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Modello</label>
+              <input
+                type="text"
+                value={form.model}
+                onChange={e => setForm(p => ({ ...p, model: e.target.value }))}
+                placeholder="es. Cisco SG350-28"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+
+            {/* Note */}
+            <div className="sm:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Note</label>
+              <textarea
+                value={form.notes}
+                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+                rows={2}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              />
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete confirm */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Elimina switch"
+        message={`Sei sicuro di voler eliminare "${deleteTarget?.name}"? Tutti i cavi collegati alle sue porte verranno rimossi.`}
+        confirmLabel="Elimina"
+        variant="danger"
+        isLoading={deleteMutation.isPending}
+        onConfirm={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id) }}
+        onClose={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
