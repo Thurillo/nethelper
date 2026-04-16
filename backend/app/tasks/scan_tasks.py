@@ -282,7 +282,9 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
                 await crud_scan_job.update_status(
                     db, scan_job_id, ScanStatus.failed, error_message=error_msg
                 )
-                raise
+                # Non fare raise: lasciare che get_async_session faccia commit degli aggiornamenti.
+                # Se raise, il context manager fa rollback e il job resta "pending" per sempre.
+                return {"status": "failed", "error": error_msg}
 
         return {"status": "completed"}
 
