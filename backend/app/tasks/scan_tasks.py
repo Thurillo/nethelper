@@ -73,13 +73,18 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
         from app.crud.scan_job import crud_scan_job
         from app.models.scan_job import ScanStatus, ScanType
         from app.models.device import Device
+        from app.models.vendor import Vendor
         from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
 
         async with get_async_session() as db:
             await crud_scan_job.update_status(db, scan_job_id, ScanStatus.running)
             await crud_scan_job.append_log(db, scan_job_id, f"[{datetime.now(timezone.utc).isoformat()}] Starting {scan_type} scan for device {device_id}...")
 
-            result = await db.execute(select(Device).where(Device.id == device_id))
+            result = await db.execute(
+                select(Device).where(Device.id == device_id)
+                .options(selectinload(Device.vendor))
+            )
             device = result.scalar_one_or_none()
             if device is None:
                 await crud_scan_job.update_status(
