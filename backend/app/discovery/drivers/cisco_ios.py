@@ -21,15 +21,16 @@ class CiscoIosDriver(BaseDriver):
     def __init__(self, device: "Device") -> None:
         super().__init__(device)
 
-    def _send_command(self, net_connect, command: str, use_textfsm: bool = True) -> Any:
-        """Send a command and optionally parse with TextFSM/NTC-Templates."""
+    def _send_command(self, net_connect, command: str, use_textfsm: bool = True, log_lines: list | None = None) -> Any:
+        """Send a command and optionally parse with TextFSM/NTC-Templates.
+        Errors are logged to log_lines (if provided) and an empty result is returned."""
         try:
-            output = net_connect.send_command(
-                command,
-                use_textfsm=use_textfsm,
-            )
+            output = net_connect.send_command(command, use_textfsm=use_textfsm)
             return output
-        except Exception:
+        except Exception as exc:
+            msg = f"[WARN] '{command}' failed: {exc}"
+            if log_lines is not None:
+                log_lines.append(msg)
             return [] if use_textfsm else ""
 
     async def collect(self) -> CollectedData:
@@ -43,6 +44,7 @@ class CiscoIosDriver(BaseDriver):
             raise RuntimeError("netmiko is required for CiscoIosDriver") from exc
 
         collected = CollectedData()
+        log_lines: list[str] = []
 
         def _ssh_collect():
             """Run blocking netmiko operations in a thread."""
@@ -60,23 +62,30 @@ class CiscoIosDriver(BaseDriver):
                 conn_params["key_file"] = ssh_params["key_file"]
 
             with netmiko.ConnectHandler(**conn_params) as net_connect:
-                # system info
-                version_raw = net_connect.send_command(
-                    "show version", use_textfsm=True
-                )
+                # ── system info ──────────────────────────────────────────────
+                version_raw = self._send_command(net_connect, "show version", log_lines=log_lines)
                 if isinstance(version_raw, list) and version_raw:
                     ver = version_raw[0]
+                    hw = ver.get("hardware")
+                    serial = ver.get("serial")
                     collected.system_info = {
-                        "model": ver.get("hardware", [None])[0] if isinstance(ver.get("hardware"), list) else ver.get("hardware"),
-                        "serial": ver.get("serial", [None])[0] if isinstance(ver.get("serial"), list) else ver.get("serial"),
+                        "model": (hw[0] if isinstance(hw, list) else hw) or None,
+                        "serial": (serial[0] if isinstance(serial, list) else serial) or None,
                         "ios_version": ver.get("version"),
                         "hostname": ver.get("hostname"),
                     }
+                    log_lines.append(f"show version OK: model={collected.system_info.get('model')}, "
+                                     f"ios={collected.system_info.get('ios_version')}")
+                elif isinstance(version_raw, str) and version_raw:
+                    # TextFSM failed — try to extract hostname from raw output
+                    import re
+                    m = re.search(r'^(\S+)\s+uptime', version_raw, re.MULTILINE)
+                    if m:
+                        collected.system_info = {"hostname": m.group(1)}
+                    log_lines.append("show version: TextFSM parse failed, raw output used")
 
-                # Interfaces
-                ifaces_raw = net_connect.send_command(
-                    "show interfaces status", use_textfsm=True
-                )
+                # ── Interfaces ───────────────────────────────────────────────
+                ifaces_raw = self._send_command(net_connect, "show interfaces status", log_lines=log_lines)
                 if isinstance(ifaces_raw, list):
                     for row in ifaces_raw:
                         collected.interfaces.append({
@@ -87,23 +96,23 @@ class CiscoIosDriver(BaseDriver):
                             "speed_mbps": _parse_speed(row.get("speed", "")),
                             "mac_address": None,
                         })
+                    log_lines.append(f"show interfaces status OK: {len(collected.interfaces)} interfaces")
 
-                # MAC address table
-                mac_raw = net_connect.send_command(
-                    "show mac address-table", use_textfsm=True
-                )
+                # ── MAC address table ────────────────────────────────────────
+                mac_raw = self._send_command(net_connect, "show mac address-table", log_lines=log_lines)
                 if isinstance(mac_raw, list):
                     for row in mac_raw:
-                        collected.mac_entries.append({
-                            "mac_address": _normalize_cisco_mac(row.get("destination_address", "")),
-                            "interface_name": row.get("destination_port", ""),
-                            "vlan_id": _safe_int(row.get("vlan")),
-                        })
+                        mac = _normalize_cisco_mac(row.get("destination_address", ""))
+                        if mac:
+                            collected.mac_entries.append({
+                                "mac_address": mac,
+                                "interface_name": row.get("destination_port", ""),
+                                "vlan_id": _safe_int(row.get("vlan")),
+                            })
+                    log_lines.append(f"show mac address-table OK: {len(collected.mac_entries)} entries")
 
-                # ARP
-                arp_raw = net_connect.send_command(
-                    "show arp", use_textfsm=True
-                )
+                # ── ARP ───────────────────────────────────────────────────────
+                arp_raw = self._send_command(net_connect, "show arp", log_lines=log_lines)
                 if isinstance(arp_raw, list):
                     for row in arp_raw:
                         mac = _normalize_cisco_mac(row.get("hardware_addr", ""))
@@ -114,11 +123,10 @@ class CiscoIosDriver(BaseDriver):
                                 "mac_address": mac,
                                 "interface_name": row.get("interface", ""),
                             })
+                    log_lines.append(f"show arp OK: {len(collected.arp_entries)} entries")
 
-                # LLDP
-                lldp_raw = net_connect.send_command(
-                    "show lldp neighbors detail", use_textfsm=True
-                )
+                # ── LLDP ──────────────────────────────────────────────────────
+                lldp_raw = self._send_command(net_connect, "show lldp neighbors detail", log_lines=log_lines)
                 if isinstance(lldp_raw, list):
                     for n in parse_lldp_neighbors_from_ssh(lldp_raw):
                         collected.neighbors.append({
@@ -129,12 +137,12 @@ class CiscoIosDriver(BaseDriver):
                             "remote_ip": n.remote_ip,
                             "platform": n.platform,
                         })
+                    log_lines.append(f"show lldp neighbors detail OK: {len(collected.neighbors)} neighbors")
 
-                # CDP
-                cdp_raw = net_connect.send_command(
-                    "show cdp neighbors detail", use_textfsm=True
-                )
+                # ── CDP ───────────────────────────────────────────────────────
+                cdp_raw = self._send_command(net_connect, "show cdp neighbors detail", log_lines=log_lines)
                 if isinstance(cdp_raw, list):
+                    n_before = len(collected.neighbors)
                     for n in parse_cdp_neighbors_from_ssh(cdp_raw):
                         collected.neighbors.append({
                             "protocol": "cdp",
@@ -144,11 +152,10 @@ class CiscoIosDriver(BaseDriver):
                             "remote_ip": n.remote_ip,
                             "platform": n.platform,
                         })
+                    log_lines.append(f"show cdp neighbors detail OK: {len(collected.neighbors) - n_before} cdp neighbors")
 
-                # VLANs
-                vlan_raw = net_connect.send_command(
-                    "show vlan brief", use_textfsm=True
-                )
+                # ── VLANs ─────────────────────────────────────────────────────
+                vlan_raw = self._send_command(net_connect, "show vlan brief", log_lines=log_lines)
                 if isinstance(vlan_raw, list):
                     for row in vlan_raw:
                         if row.get("status", "").lower() == "active":
@@ -156,9 +163,12 @@ class CiscoIosDriver(BaseDriver):
                                 collected.vlans.append(int(row["vlan_id"]))
                             except (KeyError, ValueError):
                                 pass
+                    log_lines.append(f"show vlan brief OK: {len(collected.vlans)} active VLANs")
 
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, _ssh_collect)
+        # Attach collected log lines to system_info for caller to forward to job log
+        collected.ssh_log_lines = log_lines
         return collected
 
 

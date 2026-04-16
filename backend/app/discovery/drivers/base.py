@@ -18,6 +18,7 @@ class CollectedData:
     system_info: dict = field(default_factory=dict)
     vlans: list[int] = field(default_factory=list)
     bridge_port_map: dict[int, int] = field(default_factory=dict)  # bridge_port → if_index
+    ssh_log_lines: list[str] = field(default_factory=list)  # per-command log from SSH drivers
 
 
 class BaseDriver(ABC):

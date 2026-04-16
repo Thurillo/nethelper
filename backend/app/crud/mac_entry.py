@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.base import CRUDBase
@@ -33,13 +33,16 @@ class CRUDMacEntry(CRUDBase[MacEntry, MacEntryCreate, MacEntryUpdate]):
     async def deactivate_old_entries(
         self, db: AsyncSession, device_id: int, scan_job_id: int
     ) -> None:
-        """Mark all existing mac entries for a device as inactive (except the current scan)."""
+        """Mark all existing mac entries for a device as inactive (except the current scan).
+        Also deactivates entries with scan_job_id=NULL (manually imported)."""
         await db.execute(
             update(MacEntry)
             .where(
-                MacEntry.device_id == device_id,
-                MacEntry.scan_job_id != scan_job_id,
-                MacEntry.is_active == True,
+                and_(
+                    MacEntry.device_id == device_id,
+                    MacEntry.is_active == True,
+                    or_(MacEntry.scan_job_id.is_(None), MacEntry.scan_job_id != scan_job_id),
+                )
             )
             .values(is_active=False)
         )

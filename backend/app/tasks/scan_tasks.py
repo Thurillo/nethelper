@@ -95,12 +95,76 @@ def run_device_scan(self, device_id: int, scan_job_id: int, scan_type: str) -> d
                     driver_class_str = None
                     if device.vendor and device.vendor.driver_class:
                         driver_class_str = device.vendor.driver_class
-                    if driver_class_str:
-                        from app.discovery.vendor_registry import get_driver
-                        DriverClass = get_driver(driver_class_str)
-                        driver_instance = DriverClass(device)
-                    else:
-                        raise ValueError(f"No SSH driver configured for device {device_id}")
+                    if not driver_class_str:
+                        raise ValueError(f"No SSH driver configured for device {device_id}. Set vendor.driver_class.")
+
+                    from app.discovery.vendor_registry import get_driver
+                    DriverClass = get_driver(driver_class_str)
+                    driver_instance = DriverClass(device)
+
+                    await crud_scan_job.append_log(db, scan_job_id, f"SSH driver: {driver_class_str}. Connecting to {(device.primary_ip or '').split('/')[0]}...")
+                    collected = await driver_instance.collect()
+                    # Forward per-command log lines from the SSH driver
+                    for line in collected.ssh_log_lines:
+                        await crud_scan_job.append_log(db, scan_job_id, line)
+                    await crud_scan_job.append_log(
+                        db, scan_job_id,
+                        f"SSH collect done: ifaces={len(collected.interfaces)}, "
+                        f"macs={len(collected.mac_entries)}, arp={len(collected.arp_entries)}, "
+                        f"neighbors={len(collected.neighbors)}"
+                    )
+
+                    from app.discovery.reconciler import Reconciler
+                    reconciler = Reconciler()
+                    await crud_scan_job.append_log(db, scan_job_id, "Reconciling collected data...")
+                    conflicts = await reconciler.reconcile(db, device, collected, scan_job_id)
+
+                    from app.discovery.unmanaged_detector import detect_unmanaged_switches
+                    unmanaged_conflicts = await detect_unmanaged_switches(db, device_id, scan_job_id)
+
+                    from app.discovery.topology_linker import link_topology
+                    await crud_scan_job.append_log(db, scan_job_id, "Linking topology (auto-cable)...")
+                    link_stats = await link_topology(db, device, collected, scan_job_id)
+
+                    if collected.mac_entries:
+                        from app.models.mac_entry import MacEntry, MacEntrySource
+                        from app.crud.mac_entry import crud_mac_entry
+                        await crud_mac_entry.deactivate_old_entries(db, device_id, scan_job_id)
+                        for entry in collected.mac_entries:
+                            mac_obj = MacEntry(
+                                scan_job_id=scan_job_id,
+                                device_id=device_id,
+                                mac_address=entry.get("mac_address", ""),
+                                vlan_id=entry.get("vlan_id"),
+                                ip_address=entry.get("ip_address"),
+                                hostname=entry.get("hostname"),
+                                is_active=True,
+                                source=MacEntrySource.scan,
+                            )
+                            db.add(mac_obj)
+                        await db.flush()
+
+                    device.last_seen = datetime.now(timezone.utc)
+                    db.add(device)
+
+                    summary = {
+                        "interfaces_collected": len(collected.interfaces),
+                        "mac_entries_collected": len(collected.mac_entries),
+                        "arp_entries_collected": len(collected.arp_entries),
+                        "neighbors_collected": len(collected.neighbors),
+                        "conflicts_created": len(conflicts) + len(unmanaged_conflicts) + link_stats["conflicts"],
+                        "cables_created": link_stats["cables_created"],
+                        "devices_created": link_stats["devices_created"],
+                    }
+
+                    job = await crud_scan_job.get(db, scan_job_id)
+                    if job:
+                        job.result_summary = summary
+                        db.add(job)
+                    await crud_scan_job.update_status(db, scan_job_id, ScanStatus.completed)
+                    await crud_scan_job.append_log(db, scan_job_id, f"SSH scan completed. Summary: {summary}")
+                    return {"status": "completed", "summary": summary}
+
                 else:
                     from app.discovery.snmp_client import SNMPClient
                     from app.discovery.snmp_collector import SNMPCollector

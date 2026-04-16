@@ -59,7 +59,7 @@ async def _find_device_by_mac_or_ip(
     if not candidates and ip:
         result = await db.execute(
             select(Device).where(
-                or_(Device.primary_ip == ip, Device.management_ip == ip)
+                Device.primary_ip == ip
             )
         )
         candidates = list(result.scalars().all())
@@ -83,7 +83,7 @@ async def _find_device_by_name_or_ip(
     if ip:
         result = await db.execute(
             select(Device).where(
-                or_(Device.primary_ip == ip, Device.management_ip == ip)
+                Device.primary_ip == ip
             )
         )
         return result.scalar_one_or_none()
