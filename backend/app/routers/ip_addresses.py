@@ -47,7 +47,7 @@ async def list_ip_addresses(
         ips = await crud_ip_address.get_by_prefix(db, prefix_id, skip=(page - 1) * size, limit=size)
     else:
         result = await db.execute(
-            select(IpAddress).options(*opts).offset((page - 1) * size).limit(size)
+            select(IpAddress).options(*opts).order_by(IpAddress.id).offset((page - 1) * size).limit(size)
         )
         ips = list(result.scalars().all())
     _total = await crud_ip_address.count(db)

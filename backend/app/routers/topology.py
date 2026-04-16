@@ -39,7 +39,7 @@ async def get_topology(
         stmt = stmt.where(Device.site_id == site_id)
     if device_type is not None:
         stmt = stmt.where(Device.device_type == device_type)
-    stmt = stmt.limit(max_nodes)
+    stmt = stmt.order_by(Device.id).limit(max_nodes)
     result = await db.execute(stmt)
     devices = result.scalars().all()
 

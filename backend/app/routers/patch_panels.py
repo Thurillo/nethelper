@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.crud.audit_log import log_action
@@ -42,16 +42,14 @@ async def list_patch_panels(
     page: int = 1,
     size: int = 100,
 ) -> PaginatedResponse[DeviceRead]:
-    stmt = select(Device).where(Device.device_type == DeviceType.patch_panel)
+    base_stmt = select(Device).where(Device.device_type == DeviceType.patch_panel)
     if site_id is not None:
-        stmt = stmt.where(Device.site_id == site_id)
-    skip = (page - 1) * size
-    limit = size
-    stmt = stmt.offset(skip).limit(limit)
-    result = await db.execute(stmt)
+        base_stmt = base_stmt.where(Device.site_id == site_id)
+    count_result = await db.execute(select(func.count()).select_from(base_stmt.subquery()))
+    total = count_result.scalar_one()
+    result = await db.execute(base_stmt.order_by(Device.id).offset((page - 1) * size).limit(size))
     devices = result.scalars().all()
-    _total = len(devices)
-    return PaginatedResponse.build([DeviceRead.model_validate(d) for d in devices], total=_total, page=1, size=_total or 1)
+    return PaginatedResponse.build([DeviceRead.model_validate(d) for d in devices], total=total, page=page, size=size)
 
 
 @router.get("/{panel_id}/ports", response_model=list[PatchPortDetail])
