@@ -171,6 +171,65 @@ class CRUDScanConflict(CRUDBase[ScanConflict, ScanConflictRead, ScanConflictRead
         res = await db.execute(select(ScanConflict).where(ScanConflict.id.in_(conflict_ids)))
         return list(res.scalars().all())
 
+    async def accept_new_device_conflict(
+        self,
+        db: AsyncSession,
+        conflict_id: int,
+        user_id: int,
+        device_name: str,
+        device_type: str,
+        notes: str | None = None,
+    ) -> tuple["ScanConflict | None", "Any"]:
+        """Accept a new_device_discovered conflict: create Device + Interface + Cable."""
+        conflict = await self.get(db, conflict_id)
+        if conflict is None:
+            return None, None
+
+        dv = conflict.discovered_value or {}
+        mac = dv.get("mac_address")
+        interface_id = dv.get("interface_id")
+
+        from app.models.device import Device, DeviceType, DeviceStatus
+        from app.models.interface import Interface
+        from app.models.cable import Cable, CableType
+
+        new_device = Device(
+            name=device_name,
+            device_type=DeviceType(device_type),
+            status=DeviceStatus.active,
+            mac_address=mac,
+            primary_ip=dv.get("ip_address") or None,
+        )
+        db.add(new_device)
+        await db.flush()
+        await db.refresh(new_device)
+
+        new_iface = Interface(
+            device_id=new_device.id,
+            name="eth0",
+            mac_address=mac,
+        )
+        db.add(new_iface)
+        await db.flush()
+        await db.refresh(new_iface)
+
+        if interface_id:
+            iface_a = min(interface_id, new_iface.id)
+            iface_b = max(interface_id, new_iface.id)
+            # Avoid duplicate cable
+            from sqlalchemy import select as sa_select, and_ as sa_and
+            existing_cable = await db.execute(
+                sa_select(Cable).where(
+                    sa_and(Cable.interface_a_id == iface_a, Cable.interface_b_id == iface_b)
+                )
+            )
+            if existing_cable.scalar_one_or_none() is None:
+                db.add(Cable(interface_a_id=iface_a, interface_b_id=iface_b, cable_type=CableType.other))
+                await db.flush()
+
+        resolved = await self._resolve(db, conflict_id, user_id, ConflictStatus.accepted, notes)
+        return resolved, new_device
+
     async def ignore_conflict(
         self,
         db: AsyncSession,

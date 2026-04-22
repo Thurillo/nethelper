@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { ScanConflict, ConflictFilters, ConflictResolveRequest, BulkResolveRequest, PaginatedResponse } from '../types'
+import type { ScanConflict, ConflictFilters, ConflictResolveRequest, BulkResolveRequest, AcceptNewDeviceRequest, PaginatedResponse } from '../types'
 
 export const conflictsApi = {
   list: async (params?: ConflictFilters): Promise<PaginatedResponse<ScanConflict>> => {
@@ -47,6 +47,11 @@ export const conflictsApi = {
     notes?: string
   }): Promise<ScanConflict> => {
     const response = await apiClient.post<ScanConflict>('/conflicts', data)
+    return response.data
+  },
+
+  acceptNewDevice: async (id: number, data: AcceptNewDeviceRequest): Promise<ScanConflict> => {
+    const response = await apiClient.post<ScanConflict>(`/conflicts/${id}/accept-new-device`, data)
     return response.data
   },
 

@@ -30,6 +30,7 @@ from app.schemas.device import (
     DeviceBulkUpdateRequest, DeviceBulkUpdateResponse,
     DeviceBulkDeleteRequest, DeviceBulkDeleteResponse,
     DeviceConnectionsPreview, DeviceCreate, DeviceRead, DeviceScanRequest, DeviceUpdate,
+    PortMapEntry, PortMapMacEntry,
 )
 from app.schemas.interface import InterfaceRead
 from app.schemas.ip_address import IpAddressRead
@@ -449,6 +450,149 @@ async def get_device_scan_jobs(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
     jobs = await crud_scan_job.get_by_device(db, device_id, skip=(page - 1) * size, limit=size)
     return [ScanJobRead.model_validate(j) for j in jobs]
+
+
+@router.get("/{device_id}/port-map", response_model=list[PortMapEntry])
+async def get_device_port_map(
+    device_id: int,
+    _: Annotated[object, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> list[PortMapEntry]:
+    """Return port-level classification for a switch: direct device, LLDP/CDP, unmanaged, or empty."""
+    device = await crud_device.get(db, device_id)
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found.")
+
+    # Load all interfaces
+    ifaces_result = await db.execute(
+        select(Interface).where(Interface.device_id == device_id)
+    )
+    interfaces = ifaces_result.scalars().all()
+    iface_ids = [i.id for i in interfaces]
+
+    # Load active MAC entries for these interfaces
+    from app.models.mac_entry import MacEntry
+    mac_result = await db.execute(
+        select(MacEntry).where(
+            MacEntry.interface_id.in_(iface_ids),
+            MacEntry.is_active == True,
+        )
+    )
+    macs_by_iface: dict[int, list[MacEntry]] = {}
+    for m in mac_result.scalars().all():
+        macs_by_iface.setdefault(m.interface_id, []).append(m)
+
+    # Load cables for these interfaces and find linked devices
+    InterfaceA = aliased(Interface)
+    InterfaceB = aliased(Interface)
+    DeviceA = aliased(Device)
+    DeviceB = aliased(Device)
+    cables_result = await db.execute(
+        select(Cable, InterfaceA, InterfaceB, DeviceA, DeviceB)
+        .join(InterfaceA, Cable.interface_a_id == InterfaceA.id)
+        .join(InterfaceB, Cable.interface_b_id == InterfaceB.id)
+        .outerjoin(DeviceA, InterfaceA.device_id == DeviceA.id)
+        .outerjoin(DeviceB, InterfaceB.device_id == DeviceB.id)
+        .where(
+            or_(
+                Cable.interface_a_id.in_(iface_ids),
+                Cable.interface_b_id.in_(iface_ids),
+            )
+        )
+    )
+    cable_by_iface: dict[int, tuple[int, int, str]] = {}  # iface_id → (cable_id, linked_device_id, linked_device_name)
+    for cable, ia, ib, da, db_ in cables_result.all():
+        if ia.device_id == device_id:
+            cable_by_iface[ia.id] = (cable.id, db_.id if db_ else None, db_.name if db_ else None)
+        if ib.device_id == device_id:
+            cable_by_iface[ib.id] = (cable.id, da.id if da else None, da.name if da else None)
+
+    # Load neighbors from the last completed SSH/SNMP scan job
+    from app.models.scan_job import ScanJob, ScanType as ScanJobType
+    last_job_result = await db.execute(
+        select(ScanJob)
+        .where(
+            ScanJob.device_id == device_id,
+            ScanJob.status == "completed",
+            ScanJob.scan_type.in_(["ssh_full", "snmp_full", "snmp_lldp"]),
+        )
+        .order_by(ScanJob.completed_at.desc())
+        .limit(1)
+    )
+    last_job = last_job_result.scalar_one_or_none()
+    neighbor_ports: set[str] = set()
+    neighbor_by_port: dict[str, str] = {}
+    if last_job and last_job.log_output:
+        # Parse neighbors from scan result_summary is not available; use mac data heuristic.
+        pass
+    # Better: load from ScanConflict or from a dedicated neighbors store.
+    # For now, use interface names that appear in LLDP/CDP based on cable to managed devices.
+    for iface_id, (cable_id, linked_id, linked_name) in cable_by_iface.items():
+        if linked_id is not None:
+            iface = next((i for i in interfaces if i.id == iface_id), None)
+            if iface:
+                neighbor_ports.add(iface.name)
+                neighbor_by_port[iface.name] = linked_name or ""
+
+    # Build port map
+    UNMANAGED_THRESHOLD = 3
+    entries: list[PortMapEntry] = []
+    for iface in interfaces:
+        macs = macs_by_iface.get(iface.id, [])
+        cable_info = cable_by_iface.get(iface.id)
+        mac_count = len(macs)
+
+        # Classify
+        if iface.name in neighbor_ports and cable_info and cable_info[1]:
+            classification = "lldp_cdp"
+        elif mac_count == 0:
+            classification = "empty"
+        elif mac_count >= UNMANAGED_THRESHOLD and iface.name not in neighbor_ports:
+            classification = "unmanaged"
+        elif 1 <= mac_count <= 2 and iface.name not in neighbor_ports:
+            classification = "direct"
+        else:
+            classification = "empty"
+
+        # Get vendor names
+        mac_entries_out: list[PortMapMacEntry] = []
+        for m in macs:
+            vendor_name = None
+            try:
+                from app.tasks.scan_tasks import _vendor_from_mac
+                vendor_name = _vendor_from_mac(m.mac_address)
+            except Exception:
+                pass
+            mac_entries_out.append(PortMapMacEntry(
+                mac_address=m.mac_address,
+                vendor_name=vendor_name,
+                ip_address=m.ip_address,
+                vlan_id=m.vlan_id,
+            ))
+
+        entries.append(PortMapEntry(
+            interface_id=iface.id,
+            interface_name=iface.name,
+            oper_up=iface.oper_up,
+            admin_up=iface.admin_up,
+            speed_mbps=iface.speed_mbps,
+            description=iface.description,
+            classification=classification,
+            mac_count=mac_count,
+            mac_entries=mac_entries_out,
+            linked_device_id=cable_info[1] if cable_info else None,
+            linked_device_name=cable_info[2] if cable_info else None,
+            cable_id=cable_info[0] if cable_info else None,
+            lldp_neighbor_hostname=neighbor_by_port.get(iface.name),
+        ))
+
+    # Sort: by port name naturally
+    import re
+    def _port_sort_key(e: PortMapEntry) -> tuple:
+        parts = re.split(r'(\d+)', e.interface_name)
+        return tuple(int(p) if p.isdigit() else p.lower() for p in parts)
+    entries.sort(key=_port_sort_key)
+    return entries
 
 
 @router.post("/{device_id}/scan", response_model=ScanJobRead, status_code=status.HTTP_202_ACCEPTED)

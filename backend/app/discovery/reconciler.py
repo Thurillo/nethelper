@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from app.models.scan_conflict import ScanConflict
 
 from app.discovery.drivers.base import CollectedData
+from app.discovery.topology_linker import _find_device_by_mac_or_ip, _norm_mac
 from app.models.interface import Interface
 from app.models.scan_conflict import ConflictStatus, ConflictType, ScanConflict
 
@@ -156,6 +157,84 @@ class Reconciler:
             if serial and not device.serial_number:
                 device.serial_number = serial
             db.add(device)
+
+        await db.flush()
+
+        # ----------------------------------------------------------------
+        # 3. Direct device discovery
+        # For each non-LLDP/CDP port with 1-2 MACs not yet in inventory,
+        # create a new_device_discovered conflict for admin review.
+        # ----------------------------------------------------------------
+        mac_by_iface: dict[str, list[dict]] = {}
+        for m in collected_data.mac_entries:
+            iface_name = m.get("interface_name", "")
+            if iface_name:
+                mac_by_iface.setdefault(iface_name, []).append(m)
+
+        neighbor_ports = {n.get("local_port", "") for n in collected_data.neighbors}
+
+        for iface_name, mac_list in mac_by_iface.items():
+            if iface_name in neighbor_ports:
+                continue
+            if len(mac_list) > 2:
+                continue
+
+            for mac_entry in mac_list:
+                mac = mac_entry.get("mac_address", "")
+                if not mac:
+                    continue
+
+                known = await _find_device_by_mac_or_ip(
+                    db, _norm_mac(mac), mac_entry.get("ip_address")
+                )
+                if known:
+                    continue
+
+                # Skip if a pending conflict for this MAC already exists
+                dup = await db.execute(
+                    select(ScanConflict).where(
+                        and_(
+                            ScanConflict.device_id == device.id,
+                            ScanConflict.conflict_type == ConflictType.new_device_discovered,
+                            ScanConflict.status == ConflictStatus.pending,
+                        )
+                    )
+                )
+                already_pending = any(
+                    (c.discovered_value or {}).get("mac_address") == mac
+                    for c in dup.scalars().all()
+                )
+                if already_pending:
+                    continue
+
+                vendor_name = None
+                try:
+                    from app.tasks.scan_tasks import _vendor_from_mac
+                    vendor_name = _vendor_from_mac(mac)
+                except Exception:
+                    pass
+
+                iface = existing_ifaces.get(iface_name)
+                conflict = ScanConflict(
+                    scan_job_id=scan_job_id,
+                    device_id=device.id,
+                    conflict_type=ConflictType.new_device_discovered,
+                    entity_table="interface",
+                    entity_id=iface.id if iface else None,
+                    field_name=None,
+                    current_value=None,
+                    discovered_value={
+                        "interface_name": iface_name,
+                        "interface_id": iface.id if iface else None,
+                        "mac_address": mac,
+                        "vendor_name": vendor_name,
+                        "ip_address": mac_entry.get("ip_address"),
+                        "vlan_id": mac_entry.get("vlan_id"),
+                    },
+                    status=ConflictStatus.pending,
+                )
+                db.add(conflict)
+                conflicts.append(conflict)
 
         await db.flush()
         return conflicts

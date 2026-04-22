@@ -2,7 +2,7 @@ import apiClient from './client'
 import type {
   Device, DeviceCreate, DeviceFilters, NetworkInterface, IpAddress,
   MacEntry, ScanJob, PaginatedResponse, DeviceBulkCreateRequest, DeviceBulkCreateResponse,
-  DeviceConnectionsPreview, DevicePortDetail
+  DeviceConnectionsPreview, DevicePortDetail, PortMapEntry
 } from '../types'
 
 export const devicesApi = {
@@ -52,6 +52,11 @@ export const devicesApi = {
 
   getScanJobs: async (deviceId: number, params?: { page?: number; size?: number }): Promise<PaginatedResponse<ScanJob>> => {
     const response = await apiClient.get<PaginatedResponse<ScanJob>>(`/devices/${deviceId}/scan-jobs`, { params })
+    return response.data
+  },
+
+  getPortMap: async (deviceId: number): Promise<PortMapEntry[]> => {
+    const response = await apiClient.get<PortMapEntry[]>(`/devices/${deviceId}/port-map`)
     return response.data
   },
 

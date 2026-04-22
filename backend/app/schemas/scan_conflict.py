@@ -46,3 +46,9 @@ class ConflictResolveRequest(BaseModel):
 class ConflictBulkResolveRequest(BaseModel):
     conflict_ids: list[int]
     notes: Optional[str] = None
+
+
+class AcceptNewDeviceRequest(BaseModel):
+    device_name: str
+    device_type: str
+    notes: Optional[str] = None

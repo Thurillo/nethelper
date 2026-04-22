@@ -11,6 +11,7 @@ from app.models.scan_conflict import ScanConflict
 from app.database import get_db
 from app.dependencies import get_current_user, require_admin
 from app.schemas.scan_conflict import (
+    AcceptNewDeviceRequest,
     ConflictBulkResolveRequest,
     ConflictResolveRequest,
     ScanConflictCreate,
@@ -151,6 +152,27 @@ async def ignore_conflict(
     await log_action(db, user_id=current_user.id, action="ignore_conflict",
                      entity_table="scan_conflict", entity_id=conflict_id,
                      client_ip=client_ip, description=f"Ignored conflict {conflict_id}.")
+    return ScanConflictRead.model_validate(conflict)
+
+
+@router.post("/{conflict_id}/accept-new-device", response_model=ScanConflictRead)
+async def accept_new_device_conflict(
+    conflict_id: int,
+    body: AcceptNewDeviceRequest,
+    request: Request,
+    current_user: Annotated[object, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ScanConflictRead:
+    conflict, _ = await crud_scan_conflict.accept_new_device_conflict(
+        db, conflict_id, current_user.id, body.device_name, body.device_type, body.notes
+    )
+    if conflict is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conflict not found.")
+    client_ip = getattr(request.state, "client_ip", None)
+    await log_action(db, user_id=current_user.id, action="accept_conflict",
+                     entity_table="scan_conflict", entity_id=conflict_id,
+                     client_ip=client_ip,
+                     description=f"Accepted new_device_discovered conflict {conflict_id}: '{body.device_name}'.")
     return ScanConflictRead.model_validate(conflict)
 
 

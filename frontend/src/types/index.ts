@@ -504,6 +504,16 @@ export type ConflictType =
   | 'hostname_change'
   | 'speed_change'
   | 'suspected_unmanaged_switch'
+  | 'new_device_discovered'
+  | 'new_interface'
+  | 'changed_ip'
+  | 'missing_interface'
+  | 'new_mac'
+  | 'changed_mac'
+  | 'changed_hostname'
+  | 'duplicate_device'
+  | 'port_cable_conflict'
+  | 'other'
 
 export type ConflictStatus = 'pending' | 'accepted' | 'rejected' | 'ignored'
 
@@ -533,6 +543,40 @@ export interface ConflictResolveRequest {
 export interface BulkResolveRequest {
   conflict_ids: number[]
   notes?: string | null
+}
+
+export interface AcceptNewDeviceRequest {
+  device_name: string
+  device_type: string
+  notes?: string | null
+}
+
+// ============================================================
+// PORT MAP
+
+export interface PortMapMacEntry {
+  mac_address: string
+  vendor_name: string | null
+  ip_address: string | null
+  vlan_id: number | null
+}
+
+export type PortClassification = 'direct' | 'lldp_cdp' | 'unmanaged' | 'empty'
+
+export interface PortMapEntry {
+  interface_id: number
+  interface_name: string
+  oper_up: boolean | null
+  admin_up: boolean | null
+  speed_mbps: number | null
+  description: string | null
+  classification: PortClassification
+  mac_count: number
+  mac_entries: PortMapMacEntry[]
+  linked_device_id: number | null
+  linked_device_name: string | null
+  cable_id: number | null
+  lldp_neighbor_hostname: string | null
 }
 
 // ============================================================

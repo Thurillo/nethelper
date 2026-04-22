@@ -25,9 +25,10 @@ import ScanResultPanel from '../components/scan/ScanResultPanel'
 import Table, { Column } from '../components/common/Table'
 import { useAuthStore } from '../store/authStore'
 import { useUiStore } from '../store/uiStore'
+import PortMapTab from '../components/device/PortMapTab'
 import type { NetworkInterface, IpAddress, ScanJob, DeviceStatus, DeviceType, DevicePortDetail } from '../types'
 
-type TabKey = 'interfacce' | 'ip' | 'scansioni'
+type TabKey = 'interfacce' | 'ip' | 'scansioni' | 'mappa_porte'
 
 const DEVICE_TYPES: DeviceType[] = ['switch', 'router', 'access_point', 'server', 'patch_panel', 'pdu', 'firewall', 'ups', 'unmanaged_switch', 'workstation', 'printer', 'camera', 'phone', 'other']
 const DEVICE_STATUSES: DeviceStatus[] = ['active', 'inactive', 'planned', 'decommissioned']
@@ -215,6 +216,7 @@ const DeviceDetailPage: React.FC = () => {
     { key: 'interfacce', label: 'Interfacce', count: interfaces?.length },
     { key: 'ip', label: 'Indirizzi IP', count: ipAddresses?.length },
     { key: 'scansioni', label: 'Scansioni' },
+    { key: 'mappa_porte', label: 'Mappa Porte' },
   ]
 
   const interfaceColumns: Column<NetworkInterface>[] = [
@@ -501,6 +503,9 @@ const DeviceDetailPage: React.FC = () => {
             isLoading={!ipAddresses}
             emptyTitle="Nessun indirizzo IP"
           />
+        )}
+        {activeTab === 'mappa_porte' && (
+          <PortMapTab deviceId={deviceId} />
         )}
         {activeTab === 'scansioni' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

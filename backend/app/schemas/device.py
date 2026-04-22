@@ -214,6 +214,29 @@ class DeviceScanRequest(BaseModel):
     scan_type: ScanType
 
 
+class PortMapMacEntry(BaseModel):
+    mac_address: str
+    vendor_name: Optional[str] = None
+    ip_address: Optional[str] = None
+    vlan_id: Optional[int] = None
+
+
+class PortMapEntry(BaseModel):
+    interface_id: int
+    interface_name: str
+    oper_up: Optional[bool] = None
+    admin_up: Optional[bool] = None
+    speed_mbps: Optional[int] = None
+    description: Optional[str] = None
+    classification: str  # direct | lldp_cdp | unmanaged | empty
+    mac_count: int
+    mac_entries: list[PortMapMacEntry]
+    linked_device_id: Optional[int] = None
+    linked_device_name: Optional[str] = None
+    cable_id: Optional[int] = None
+    lldp_neighbor_hostname: Optional[str] = None
+
+
 class PPConnection(BaseModel):
     pp_name: str
     pp_port: str
